@@ -1,0 +1,79 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createPlayer, step, GATES, formatTime, cleanRecords, COURSES, frameAt, locate } from '../src/physics.js';
+import { MAPS } from '../src/maps.js';
+test('every map is a finishable course and new maps are not straight lines',()=>{
+  const recordKeys=new Set();
+  for(const map of MAPS){
+    const c=COURSES[map.id];recordKeys.add(map.recordKey);
+    const p=createPlayer(c);let airborne=0;
+    for(let i=0;i<120*120&&!p.done;i++){
+      if(p.releaseReady&&airborne<=0)airborne=.5;
+      const held=airborne<=0;airborne-=1/120;
+      step(p,{leftHook:held,rightHook:held,forward:true},1/120);
+    }
+    assert.equal(p.done,true,map.id);assert.equal(p.gate,c.gates.length,map.id);assert.equal(p.falls,0,map.id);
+    let turn=0;for(let s=0;s<c.length;s+=20){const a=frameAt(c,s),b=frameAt(c,s+20);turn+=Math.abs(Math.atan2(Math.sin(a.heading-b.heading),Math.cos(a.heading-b.heading)));}
+    if(map.id!=='sunset')assert.ok(turn>Math.PI/2,`${map.id} should bend (total turn ${turn.toFixed(2)} rad)`);
+  }
+  assert.equal(recordKeys.size,MAPS.length,'each map keeps its own leaderboard');
+});
+test('track projection round-trips along a curved course',()=>{
+  const c=COURSES.aurora;
+  for(const s of [0,300,640,1000]){const f=frameAt(c,s),loc=locate(c,f.x+f.rx*10,f.z+f.rz*10,Math.round((s+c.pre)/2));assert.ok(Math.abs(loc.s-s)<.5);assert.ok(Math.abs(loc.lateral-10)<.5);}
+});
+test('curved walls keep the runner inside the corridor',()=>{
+  const c=COURSES.canyon,p=createPlayer(c);
+  for(let i=0;i<120*6;i++){step(p,{rightHook:true,forward:true},1/120);assert.ok(Math.abs(p.lateral)<=c.halfWidth+.01);}
+});
+test('dual hooks and timed releases complete all seven gates without a fall',()=>{
+  const p=createPlayer();let airborne=0,releases=0,minY=p.y,maxY=p.y;
+  for(let i=0;i<120*90&&!p.done;i++){
+    if(p.releaseReady&&airborne<=0){airborne=.5;releases++;}
+    const held=airborne<=0;airborne-=1/120;
+    step(p,{leftHook:held,rightHook:held,forward:true},1/120);
+    minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);
+  }
+  assert.equal(p.done,true,JSON.stringify(p));assert.equal(p.gate,7);assert.equal(p.falls,0);
+  assert.ok(releases>=5);assert.ok(maxY-minY>30,'swings must have a substantial vertical arc');
+});
+test('holding keeps a fixed pivot and produces a descending then rising arc',()=>{
+  const p=createPlayer();step(p,{rightHook:true},1/120);const pivot=p.anchor;let lowest=p.y,descended=false,rose=false;
+  for(let i=0;i<420;i++){
+    step(p,{rightHook:true},1/120);assert.equal(p.anchor,pivot);assert.equal(p.falls,0);
+    lowest=Math.min(lowest,p.y);if(p.vy< -10)descended=true;if(descended&&p.vy>10&&p.y-lowest>10)rose=true;
+  }
+  assert.ok(descended&&rose);assert.ok(lowest<30);
+});
+test('release preserves momentum instead of adding a scripted launch',()=>{
+  const p=createPlayer();for(let i=0;i<600&&!p.releaseReady;i++)step(p,{rightHook:true,forward:true},1/120);
+  assert.ok(p.releaseReady);const v=[p.vx,p.vy,p.vz];
+  step(p,{rightHook:false},1/120);assert.equal(p.anchor,null);assert.equal(p.released,true);
+  assert.ok(Math.hypot(p.vx-v[0],p.vy-v[1],p.vz-v[2])<1);
+  assert.ok(p.vy>0&&p.vz<0);
+});
+test('a fall recovers to the most recent checkpoint and adds a penalty',()=>{const p=createPlayer();Object.assign(p,{gate:2,y:2,z:-310,time:10});assert.equal(step(p,{},1/120),'recover');assert.equal(p.gate,2);assert.equal(p.z,GATES[1].z-8);assert.ok(p.time>=13);assert.equal(p.falls,1);});
+test('gates cannot be skipped or passed outside the ring',()=>{const p=createPlayer();Object.assign(p,{z:-149,y:100,vz:-50});step(p,{},.05);assert.equal(p.gate,0);p.z=-210;assert.equal(step(p,{},1/120),'recover');assert.equal(p.gate,0);});
+test('finish stops the clock',()=>{const p=createPlayer();Object.assign(p,{gate:6,z:-1049,y:39,vz:-40});assert.equal(step(p,{rightHook:false},.05),'finish');const time=p.time;step(p,{},1);assert.equal(p.time,time);});
+test('formatting and corrupt record validation',()=>{assert.equal(formatTime(65.123),'01:05.123');assert.equal(formatTime(0),'00:00.000');assert.deepEqual(cleanRecords([null,{name:'bad',time:-1},{name:'slow',time:100},{name:'fast',time:50},{name:'nan',time:NaN}]).map(r=>r.name),['fast','slow']);});
+test('left and right inputs select their own side and pull toward that side',()=>{
+  for(const side of ['left','right']){
+    const p=createPlayer();for(let i=0;i<120;i++)step(p,{[side+'Hook']:true},1/120);
+    const direction=side==='left'?-1:1;
+    assert.equal(Math.sign(p.hooks[side].anchor.x),direction);assert.equal(p.hookCount,1);
+    assert.ok(p.x*direction>1);assert.equal(p.hooks[side==='left'?'right':'left'],null);
+  }
+});
+test('two hooks coexist and releasing A keeps D attached to the same building',()=>{
+  const p=createPlayer();for(let i=0;i<60;i++)step(p,{leftHook:true,rightHook:true},1/120);
+  assert.equal(p.hookCount,2);const right=p.hooks.right.anchor;
+  for(const h of Object.values(p.hooks))assert.ok(Math.hypot(p.x-h.anchor.x,p.y-h.anchor.y,p.z-h.anchor.z)<=h.rope+.02);
+  step(p,{rightHook:true},1/120);assert.equal(p.hooks.left,null);assert.equal(p.hooks.right.anchor,right);assert.equal(p.hookCount,1);
+  step(p,{},1/120);assert.equal(p.hookCount,0);assert.equal(p.anchor,null);
+});
+test('W and S apply opposite longitudinal forces without firing a hook',()=>{
+  for(const [key,direction] of [['forward',-1],['back',1]]){
+    const p=createPlayer();p.vz=0;step(p,{[key]:true},1/120);
+    assert.equal(Math.sign(p.vz),direction);assert.equal(p.hookCount,0);assert.equal(p.vx,0);
+  }
+});

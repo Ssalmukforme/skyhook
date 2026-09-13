@@ -1,0 +1,138 @@
+failed to load config from C:\Users\wonye\project\games\sunset-swing\vite.config.js
+오후 4:37:31 [vite] Unexpected identifier 'run'
+오후 4:37:31 [vite] server restart failed
+오후 4:37:49 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 4:37:50 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 4:37:50 [vite] http proxy error: /api/maps/sunset/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 4:40:24 [vite] http proxy error: /api/maps/harbor/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 4:40:24 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 4:40:27 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 4:40:47 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 4:40:48 [vite] http proxy error: /api/maps/sunset/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 4:40:48 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 4:42:51 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:43:31 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:44:01 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:07 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:10 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:11 [vite] http proxy error: /api/maps/sunset/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:12 [vite] http proxy error: /api/maps/harbor/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:14 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:15 [vite] http proxy error: /api/maps/aurora/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:16 [vite] http proxy error: /api/maps/sunset/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:41 [vite] http proxy error: /api/maps/sunset/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:43 [vite] http proxy error: /api/maps/sunset/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:45:44 [vite] http proxy error: /api/maps/harbor/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:46:08 [vite] http proxy error: /api/maps/harbor/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:46:10 [vite] http proxy error: /api/maps/harbor/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:46:11 [vite] http proxy error: /api/maps/aurora/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 6:46:37 [vite] http proxy error: /api/maps/aurora/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:15:04 [vite] http proxy error: /api/maps/aurora/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:15:10 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:15:11 [vite] http proxy error: /api/maps/aurora/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:15:37 [vite] http proxy error: /api/maps/aurora/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:15:43 [vite] http proxy error: /api/maps/aurora/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:15:45 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:16:15 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:24:50 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:25:24 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:25:46 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:25:50 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:25:51 [vite] http proxy error: /api/runs
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:25:53 [vite] http proxy error: /api/maps/canyon/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:25:56 [vite] http proxy error: /api/maps/harbor/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:25:57 [vite] http proxy error: /api/maps/sunset/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:25:58 [vite] http proxy error: /api/maps/harbor/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:26:02 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:26:25 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+오후 8:26:28 [vite] http proxy error: /api/maps/garden/leaderboard?limit=20
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)

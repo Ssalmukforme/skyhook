@@ -1,0 +1,427 @@
+import * as THREE from 'three';
+import { createRunner, animateRunner, cueRunner, resetRunner } from './runner.js';
+import './style.css';
+import { MAPS } from './maps.js';
+import { COURSES, createPlayer, step, formatTime, cleanRecords, frameAt } from './physics.js';
+import { buildWorld } from './worlds.js';
+import { fetchBoard, submitRun, describeError } from './leaderboard.js';
+
+const $ = s => document.querySelector(s);
+const canvas = $('#world');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); }
+catch (error) { $('#loading').textContent = '3D 화면을 열 수 없습니다. 브라우저의 하드웨어 가속을 켜고 다시 열어 주세요.'; throw error; }
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.25;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2('#c89490', .0021);
+const camera = new THREE.PerspectiveCamera(59, innerWidth / innerHeight, .2, 1750);
+const hemiLight = new THREE.HemisphereLight('#ffcca4', '#6a668f', 2.9); scene.add(hemiLight);
+const sunLight = new THREE.DirectionalLight('#ffb474', 3.2);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+Object.assign(sunLight.shadow.camera, { left: -95, right: 95, top: 95, bottom: -95, near: 1, far: 520 });
+sunLight.shadow.normalBias = .25;
+scene.add(sunLight, sunLight.target);
+// Gradient sky with optional animated aurora curtains for night maps.
+const sky = new THREE.Mesh(new THREE.SphereGeometry(1500, 32, 20), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: false,
+  uniforms: { top: { value: new THREE.Color() }, middle: { value: new THREE.Color() }, bottom: { value: new THREE.Color() }, aurora: { value: 0 }, time: { value: 0 } },
+  vertexShader: 'varying vec3 vPos; void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+  fragmentShader: `varying vec3 vPos;uniform vec3 top;uniform vec3 middle;uniform vec3 bottom;uniform float aurora;uniform float time;
+void main(){vec3 d=normalize(vPos);float h=d.y;vec3 c=mix(bottom,middle,smoothstep(-.05,.28,h));c=mix(c,top,smoothstep(.22,.85,h));
+if(aurora>0.){float az=atan(d.z,d.x);float band=smoothstep(.08,.28,h)*smoothstep(.75,.35,h);
+float w=sin(az*3.+time*.12+sin(az*7.-time*.21)*.9);float curtain=pow(max(0.,sin(h*14.+w*2.6-time*.3)),3.)*band;
+float rays=.55+.45*sin(az*60.+sin(az*9.+time*.4)*4.);vec3 green=vec3(.2,1.,.62),violet=vec3(.55,.3,1.);
+c+=mix(green,violet,smoothstep(.3,.62,h))*curtain*rays*.55*aurora;}
+gl_FragColor=vec4(c,1.);
+#include <colorspace_fragment>
+}`
+})); scene.add(sky);
+const sun = new THREE.Mesh(new THREE.CircleGeometry(1, 64), new THREE.MeshBasicMaterial({ color: '#ffe0ac', fog: false, toneMapped: false }));
+const glow = new THREE.Mesh(new THREE.CircleGeometry(1.3, 64), new THREE.MeshBasicMaterial({ color: '#ffc091', fog: false, toneMapped: false, transparent: true, opacity: .1, depthWrite: false }));
+scene.add(sun, glow);
+const starPositions = new Float32Array(1600 * 3);
+for (let i = 0; i < 1600; i++) { const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, y = Math.abs(u) * .95 + .05, r = Math.sqrt(1 - y * y); starPositions.set([Math.cos(a) * r * 1400, y * 1400, Math.sin(a) * r * 1400], i * 3); }
+const starGeo = new THREE.BufferGeometry(); starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: '#ffffff', size: 2.2, sizeAttenuation: false, fog: false, transparent: true, opacity: .85, depthWrite: false })); scene.add(stars);
+
+const runner = createRunner();
+const { hero, cableOutlet } = runner; scene.add(hero);
+const cableOrigin = new THREE.Vector3();
+const ropes = Object.fromEntries(['left', 'right'].map(side => {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: '#fff1d9', transparent: true, opacity: .93 })); line.frustumCulled = false; scene.add(line); return [side, line];
+})); const rope = ropes.right;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const streakPositions = [];
+for (let i = 0; i < 24; i++) { const angle = i / 24 * Math.PI * 2, x = Math.cos(angle) * 12, y = Math.sin(angle) * 7; streakPositions.push(x, y, -18, x, y, -24 - Math.random() * 5); }
+const streakGeometry = new THREE.BufferGeometry(); streakGeometry.setAttribute('position', new THREE.Float32BufferAttribute(streakPositions, 3));
+const streaks = new THREE.LineSegments(streakGeometry, new THREE.LineBasicMaterial({ color: '#ffe1b5', transparent: true, opacity: 0, depthWrite: false })); camera.add(streaks); scene.add(camera);
+const hookPulse = new THREE.Mesh(new THREE.TorusGeometry(1.7, .09, 5, 24), new THREE.MeshBasicMaterial({ color: '#ffe0ad', transparent: true, opacity: 0, depthWrite: false })); scene.add(hookPulse);
+let hookFlash = 0;
+// Weather particles wrap around the camera so snow, dust or petals always fill the view.
+const PARTICLE_BOX = 160, particleGeo = new THREE.BufferGeometry();
+let particleBase = new Float32Array(0), particles = null;
+
+let mapIndex = 0, map = MAPS[0], course = COURSES[map.id], world = null, env = null;
+// Menu framing: sunset keeps its original street-side shot, curved maps look down the corridor.
+const menuCamera = () => map.id === 'sunset' ? [-91, 58, 65, 165, -14, 43] : [-78, 16, 72, 150, -8, 44];
+function worldPoint(s, lateral, y, out = new THREE.Vector3()) { const f = frameAt(course, s); return out.set(f.x + f.rx * lateral, f.y + y, f.z + f.rz * lateral); }
+function applyEnvironment() {
+  scene.fog.color.set(env.fog); scene.fog.density = env.fogDensity;
+  hemiLight.color.set(env.hemiSky); hemiLight.groundColor.set(env.hemiGround); hemiLight.intensity = env.hemi;
+  sunLight.color.set(env.sunColor); sunLight.intensity = env.sun;
+  renderer.toneMappingExposure = env.exposure;
+  const u = sky.material.uniforms; u.top.value.set(env.skyTop); u.middle.value.set(env.skyMiddle); u.bottom.value.set(env.skyBottom); u.aurora.value = env.aurora;
+  sun.material.color.set(env.disc); sun.scale.setScalar(env.discSize); glow.material.color.set(env.glow); glow.material.opacity = env.glowOpacity; glow.scale.setScalar(env.discSize);
+  stars.visible = !!env.stars; hookPulse.material.color.set(env.rope); streaks.material.color.set(env.rope);
+  const p = env.particles;
+  particleBase = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count * 3; i++) particleBase[i] = Math.random() * PARTICLE_BOX;
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(p.count * 3), 3));
+  if (particles) { scene.remove(particles); particles.material.dispose(); }
+  particles = new THREE.Points(particleGeo, new THREE.PointsMaterial({ color: p.color, size: p.size, transparent: true, opacity: p.opacity, depthWrite: false }));
+  particles.frustumCulled = false; scene.add(particles);
+  document.documentElement.style.setProperty('--accent', map.accent);
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', env.fog);
+}
+function loadMap(index) {
+  mapIndex = (index + MAPS.length) % MAPS.length; map = MAPS[mapIndex]; course = COURSES[map.id];
+  if (world) { scene.remove(world.root); world.dispose(); }
+  world = buildWorld(map, course); env = world.env; scene.add(world.root);
+  applyEnvironment(); loadRecords(); renderMapCard(); updateWorldInfo(); player = createPlayer(course);
+  menuAnchor = course.anchors.find(a => a.side > 0 && a.s > 60) ?? course.anchors[0];
+  const [cs, cl, cy, ls, ll, ly] = menuCamera(); worldPoint(cs, cl, cy, camera.position); camera.lookAt(worldPoint(ls, ll, ly)); worldPoint(48, 3, 52, hero.position);
+  try { localStorage.setItem('skyhook.selectedMap', map.id); } catch { }
+}
+
+let player = createPlayer(course), mode = 'menu', previousMode = 'playing', countdown = 3, accumulator = 0, last = performance.now(), worldTime = 0, toastUntil = 0, menuAnchor = null;
+const keys = new Set(), touchKeys = new Map(); let records = [], storageWorks = true, savedLocal = false, submitted = false, runBest = Infinity;
+function loadRecords() {
+  try { records = cleanRecords(JSON.parse(localStorage.getItem(map.recordKey) || '[]')); storageWorks = true; } catch { records = []; storageWorks = false; }
+  refreshBest();
+}
+function refreshBest() { const best = records.length ? formatTime(records[0].time) : '--:--.---'; $('#best').textContent = best; $('#best-hud').textContent = 'BEST ' + best + (worldRecord ? ' · 1위 ' + formatTime(worldRecord) : ''); refreshRowBests(); }
+// Top-down route sketch generated from the real centerline.
+function drawRoute(svg, c, width, height, detailed) {
+  const pts = []; for (let s = -20; s <= c.length + 20; s += 10) { const f = frameAt(c, s); pts.push([f.x, f.z]); }
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  pts.forEach(([x, z]) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); });
+  // Long straight courses read better rotated to run left-to-right like the original sketch.
+  const rotate = maxZ - minZ > (maxX - minX) * 1.4, proj = ([x, z]) => rotate ? [-z, x] : [x, z];
+  let a = Infinity, b = -Infinity, cMin = Infinity, d = -Infinity;
+  pts.map(proj).forEach(([u, v]) => { a = Math.min(a, u); b = Math.max(b, u); cMin = Math.min(cMin, v); d = Math.max(d, v); });
+  const margin = detailed ? 15 : 5, scale = Math.min((width - margin * 2) / Math.max(1, b - a), (height - margin * 1.6) / Math.max(1, d - cMin));
+  const ox = width / 2 - (a + b) / 2 * scale, oy = height / 2 - (cMin + d) / 2 * scale;
+  const toSvg = p => { const [u, v] = proj(p); return [(u * scale + ox).toFixed(1), (v * scale + oy).toFixed(1)]; };
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + toSvg(p).join(' ')).join('');
+  svg.replaceChildren();
+  const el = (tag, attrs) => { const node = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) node.setAttribute(k, attrs[k]); svg.append(node); return node; };
+  if (detailed) el('path', { d: path, class: 'map-route-shadow' });
+  el('path', { d: path, class: 'map-route' });
+  const [sx, sy] = toSvg(pts[2]), last = c.gates.at(-1), [fx, fy] = toSvg([last.x, last.z]);
+  if (detailed) c.gates.slice(0, -1).forEach(g => { const [x, y] = toSvg([g.x, g.z]); el('circle', { cx: x, cy: y, r: 2.4, class: 'map-gate' }); });
+  el('circle', { cx: sx, cy: sy, r: detailed ? 5 : 2.2, class: 'map-start' });
+  el('circle', { cx: fx, cy: fy, r: detailed ? 4.5 : 2.2, class: 'map-finish' });
+}
+const withDirection = name => { const code = name.charCodeAt(name.length - 1) - 0xAC00, final = code >= 0 && code < 11172 ? code % 28 : 0; return name + (final === 0 || final === 8 ? '로' : '으로'); };
+const mapRows = MAPS.map((m, i) => {
+  const row = document.createElement('button'); row.type = 'button'; row.className = 'map-row'; row.setAttribute('role', 'option'); row.style.setProperty('--row-accent', m.accent);
+  const no = Object.assign(document.createElement('span'), { className: 'row-no', textContent: m.no });
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 50 30'); svg.setAttribute('class', 'row-route'); svg.setAttribute('aria-hidden', 'true'); drawRoute(svg, COURSES[m.id], 50, 30, false);
+  const info = Object.assign(document.createElement('span'), { className: 'row-info' });
+  info.append(Object.assign(document.createElement('span'), { className: 'row-name', textContent: m.name }), Object.assign(document.createElement('span'), { className: 'row-trait', textContent: m.trait }));
+  const meta = Object.assign(document.createElement('span'), { className: 'row-meta' });
+  meta.append(Object.assign(document.createElement('span'), { className: 'row-stars', textContent: '★'.repeat(m.difficulty) + '☆'.repeat(3 - m.difficulty) }), Object.assign(document.createElement('span'), { className: 'row-best' }));
+  row.append(no, svg, info, meta);
+  // First click previews the district; clicking the selected one again starts the run.
+  row.addEventListener('click', () => { if (i === mapIndex) begin(); else loadMap(i); });
+  $('#map-list').append(row); return row;
+});
+function storedBest(m) { try { return cleanRecords(JSON.parse(localStorage.getItem(m.recordKey) || '[]'))[0]?.time; } catch { return undefined; } }
+function refreshRowBests() {
+  MAPS.forEach((m, i) => { const best = m === map ? records[0]?.time : storedBest(m), label = mapRows[i].querySelector('.row-best'); label.textContent = best ? formatTime(best) : '기록 없음'; label.classList.toggle('none', !best); });
+}
+function renderMapCard() {
+  $('#map-count').textContent = `${map.no} / ${pad(MAPS.length)}`;
+  $('#map-name').textContent = map.name; $('#map-en').textContent = map.en; $('#map-tagline').textContent = map.tagline;
+  $('#map-length').replaceChildren(document.createTextNode((course.length / 1000).toFixed(2)), Object.assign(document.createElement('span'), { textContent: ' km' }));
+  $('#map-gates').replaceChildren(document.createTextNode(course.gates.length), Object.assign(document.createElement('span'), { textContent: ' GATES' }));
+  $('#map-difficulty').replaceChildren(document.createTextNode('★'.repeat(map.difficulty)), Object.assign(document.createElement('span'), { textContent: ' ☆'.repeat(3 - map.difficulty) }));
+  drawRoute($('#map-svg'), course, 300, 120, true); $('#map-svg').setAttribute('aria-label', `${map.name} 코스 약도`);
+  const rowFocused = mapRows.includes(document.activeElement);
+  mapRows.forEach((row, i) => { row.setAttribute('aria-selected', String(i === mapIndex)); row.title = i === mapIndex ? `${map.name} · 한 번 더 누르면 출발` : `${MAPS[i].name} 선택`; });
+  const selected = mapRows[mapIndex]; if (rowFocused) selected.focus(); selected.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  $('#start-label').textContent = `${withDirection(map.name)} 출발`;
+  $('#hud-district').textContent = 'DISTRICT ' + map.no; $('#hud-name').textContent = map.name;
+  $('#result-course').textContent = map.name + ' · 완주 기록';
+  $('#remaining').replaceChildren(document.createTextNode(course.length.toLocaleString() + ' '), Object.assign(document.createElement('small'), { textContent: 'm' }));
+}function hide(id) { $(id).classList.add('hidden'); } function show(id) { $(id).classList.remove('hidden'); }
+function clearInput() { keys.clear(); touchKeys.clear(); }
+function pressed(key) { return keys.has(key) || [...touchKeys.values()].includes(key); }
+function eventKey(e) { return e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : e.key.toLowerCase(); }
+const pad = n => String(n).padStart(2, '0');
+function begin() {
+  clearInput(); player = createPlayer(course); resetRunner(runner); savedLocal = false; submitted = false; runBest = records[0]?.time ?? Infinity; accumulator = 0; mode = 'countdown'; countdown = 3;
+  ['#menu', '#pause', '#result', '#records', '#help'].forEach(hide); show('#hud'); show('#countdown'); $('#countdown').textContent = '3'; document.body.classList.add('playing');
+  world.gates.forEach(g => g.visible = true); worldPoint(-18, 0, 64, camera.position); camera.lookAt(worldPoint(60, 0, 57)); camForward.set(frameAt(course, 0).tx, 0, frameAt(course, 0).tz);
+  $('#save-form button').disabled = false; $('#save-form button').textContent = '랭킹 등록'; $('#submit-status').textContent = '';
+  toast(`${map.name}\n${map.trait}`, 3.5); wakeAudio();
+}
+function home() { mode = 'menu'; clearInput(); ['#hud', '#pause', '#result', '#countdown'].forEach(hide); show('#menu'); document.body.classList.remove('playing'); world.gates.forEach(g => g.visible = true); refreshBest(); updateWorldInfo(); }
+function pause() { if (!['playing', 'countdown'].includes(mode)) return; previousMode = mode; mode = 'paused'; clearInput(); hide('#countdown'); show('#pause'); }
+function resume() { mode = previousMode; clearInput(); hide('#pause'); if (mode === 'countdown') show('#countdown'); last = performance.now(); }
+function finish() {
+  mode = 'result'; clearInput(); hide('#hud'); show('#result'); $('#final-time').textContent = formatTime(player.time);
+  $('#result-eyebrow').textContent = player.time < runBest ? 'NEW PERSONAL BEST' : 'COURSE COMPLETE';
+  $('#result-message').textContent = player.falls ? `완주! 복귀 ${player.falls}회 · 추가 시간 ${player.falls * 3}초 포함` : '한 번의 추락도 없이 완주했어요.';
+  try { $('#nickname').value = localStorage.getItem('skyhook.nickname') || $('#nickname').value; } catch { }
+  boards.result.mapId = map.id; renderBoard('result'); chime(3);
+}
+function toast(text, seconds = 2) { $('#toast').textContent = text; toastUntil = worldTime + seconds; $('#toast').style.opacity = 1; }
+function emptyNote(root, text) { root.append(Object.assign(document.createElement('p'), { className: 'empty', textContent: text })); }
+function rankRow(rank, name, time, { you = false } = {}) {
+  const row = document.createElement('div'); row.className = 'rank-row' + (rank <= 3 ? ' podium podium-' + rank : '') + (you ? ' you' : '');
+  const label = Object.assign(document.createElement('span'), { textContent: name });
+  if (you) label.append(Object.assign(document.createElement('em'), { textContent: 'YOU' }));
+  row.append(Object.assign(document.createElement('span'), { textContent: pad(rank) }), label, Object.assign(document.createElement('strong'), { textContent: formatTime(time) }));
+  return row;
+}
+function localRecordsFor(m) { if (m === map) return records; try { return cleanRecords(JSON.parse(localStorage.getItem(m.recordKey) || '[]')); } catch { return []; } }
+// Two ranking panels (records dialog, result screen) share one renderer: global board or this browser's runs.
+const boards = { records: { mapId: map.id, tab: 'global', token: 0, list: '#ranks', standing: '#records-standing', caption: '#records-course' }, result: { mapId: map.id, tab: 'global', token: 0, list: '#result-ranks', standing: '#result-standing' } };
+async function renderBoard(key, { fresh = false } = {}) {
+  const b = boards[key], m = MAPS.find(x => x.id === b.mapId), root = $(b.list), standing = $(b.standing), token = ++b.token;
+  document.querySelectorAll(`.board-tabs[data-board="${key}"] [data-tab]`).forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === b.tab)));
+  if (key === 'records') document.querySelectorAll('#board-maps button').forEach(chip => chip.setAttribute('aria-pressed', String(chip.dataset.map === m.id)));
+  if (b.caption) $(b.caption).textContent = b.tab === 'global' ? `${m.name} · 모든 플레이어의 최고 기록` : `${m.name} · 이 브라우저에 저장된 기록`;
+  root.replaceChildren(); standing.textContent = '';
+  if (b.tab === 'local') {
+    const list = localRecordsFor(m);
+    if (!list.length) emptyNote(root, '아직 기록이 없어요.\n첫 번째 완주 기록을 남겨보세요.');
+    list.forEach((r, i) => root.append(rankRow(i + 1, r.name, r.time)));
+    return;
+  }
+  root.classList.add('loading'); emptyNote(root, '랭킹을 불러오는 중…');
+  try {
+    const data = await fetchBoard(m.id, { fresh });
+    if (token !== b.token) return;
+    root.replaceChildren();
+    if (!data.entries.length) emptyNote(root, '아직 아무도 완주하지 않았어요.\n첫 번째 1위가 되어 보세요.');
+    data.entries.forEach(e => root.append(rankRow(e.rank, e.name, e.timeMs / 1000, { you: e.you })));
+    const you = data.you;
+    standing.textContent = you ? `내 순위 ${you.rank}위 · ${formatTime(you.timeMs / 1000)} · 참가 ${data.total}명` : data.total ? `참가 ${data.total}명 · 완주 후 랭킹에 등록해 보세요` : '';
+  } catch (error) {
+    if (token !== b.token) return;
+    root.replaceChildren(); emptyNote(root, `${describeError(error)}\n내 기록 탭에서 이 브라우저의 기록은 볼 수 있어요.`);
+  } finally { if (token === b.token) root.classList.remove('loading'); }
+}
+let worldToken = 0, worldRecord = null;
+async function updateWorldInfo({ fresh = false } = {}) {
+  const token = ++worldToken, id = map.id;
+  worldRecord = null; $('#world-best').textContent = '--:--.---'; $('#world-best').classList.remove('muted'); $('#world-label').textContent = '전체 1위'; $('#best-label').textContent = 'MY BEST'; refreshBest();
+  try {
+    const data = await fetchBoard(id, { fresh });
+    if (token !== worldToken) return;
+    const top = data.entries[0];
+    worldRecord = top ? top.timeMs / 1000 : null;
+    $('#world-best').textContent = top ? formatTime(worldRecord) : '아직 없음'; $('#world-best').classList.toggle('muted', !top);
+    $('#world-label').textContent = top ? `전체 1위 · ${top.name}` : '전체 1위';
+    if (data.you) $('#best-label').textContent = `MY BEST · ${data.you.rank}위/${data.total}명`;
+    refreshBest();
+  } catch { if (token === worldToken) { $('#world-best').textContent = '랭킹 서버 연결 안 됨'; $('#world-best').classList.add('muted'); } }
+}
+$('#start').addEventListener('click', begin); $('#again').addEventListener('click', begin); $('#restart-pause').addEventListener('click', begin); $('#resume').addEventListener('click', resume); $('#pause-button').addEventListener('click', pause);
+document.querySelectorAll('.home-button').forEach(b => b.addEventListener('click', home));
+MAPS.forEach(m => {
+  const chip = Object.assign(document.createElement('button'), { type: 'button', textContent: m.name }); chip.dataset.map = m.id; chip.style.setProperty('--row-accent', m.accent);
+  chip.addEventListener('click', () => { boards.records.mapId = m.id; renderBoard('records'); });
+  $('#board-maps').append(chip);
+});
+document.querySelectorAll('.board-tabs').forEach(tabs => tabs.addEventListener('click', e => {
+  const tab = e.target.closest('[data-tab]'); if (!tab) return;
+  boards[tabs.dataset.board].tab = tab.dataset.tab; renderBoard(tabs.dataset.board);
+}));
+$('#records-toggle').addEventListener('click', () => { boards.records.mapId = map.id; renderBoard('records'); show('#records'); });
+$('#help-open').addEventListener('click', () => show('#help')); $('#help-done').addEventListener('click', () => hide('#help'));
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => hide('#' + b.dataset.close)));
+$('#save-form').addEventListener('submit', async e => {
+  e.preventDefault(); if (submitted || !player.done) return;
+  const button = $('#save-form button'), status = $('#submit-status'), name = $('#nickname').value.trim() || 'PLAYER', run = { mapId: map.id, name, time: player.time, falls: player.falls };
+  try { localStorage.setItem('skyhook.nickname', name); } catch { }
+  if (!savedLocal) {
+    records = cleanRecords([...records, { name, time: player.time, falls: player.falls }]);
+    try { localStorage.setItem(map.recordKey, JSON.stringify(records)); storageWorks = true; } catch { storageWorks = false; }
+    savedLocal = true; refreshBest();
+  }
+  button.disabled = true; button.textContent = '등록 중…'; status.className = 'submit-status'; status.textContent = '전체 랭킹에 등록하는 중…';
+  try {
+    const result = await submitRun(run), s = result.standing;
+    submitted = true; button.textContent = '등록됨';
+    status.classList.add('ok');
+    status.textContent = result.improved ? `전체 ${s.rank}위 / ${s.total}명 · 이 맵 개인 최고 기록 갱신!` : `등록 완료 · 내 최고 기록은 전체 ${s.rank}위 / ${s.total}명`;
+    boards.result.tab = 'global'; renderBoard('result', { fresh: true }); updateWorldInfo();
+  } catch (error) {
+    button.disabled = false; button.textContent = '다시 등록'; status.classList.add('error');
+    status.textContent = `${describeError(error)} 기록은 이 브라우저에 저장했어요.`;
+    if (error.code === 'implausible_time') { button.disabled = true; button.textContent = '등록 불가'; }
+    if (boards.result.tab === 'local') renderBoard('result');
+  }
+  if (!storageWorks) $('#result-message').textContent = '이 브라우저가 저장을 차단해 이번 실행 동안만 기록이 유지됩니다.';
+});
+window.addEventListener('keydown', e => {
+  if (e.target instanceof HTMLInputElement) return;
+  const k = eventKey(e);
+  if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k) && ['playing', 'countdown', 'paused'].includes(mode)) e.preventDefault();
+  if (k === 'escape') { if (mode === 'paused') resume(); else if (['playing', 'countdown'].includes(mode)) pause(); else { hide('#help'); hide('#records'); } return; }
+  if (k === 'r' && !e.repeat && ['playing', 'paused', 'countdown'].includes(mode)) { begin(); return; }
+  if (mode === 'menu' && $('#records').classList.contains('hidden') && $('#help').classList.contains('hidden')) {
+    if (k === 'enter' && document.activeElement === document.body) { begin(); return; }
+    if (/^[1-9]$/.test(k) && Number(k) <= MAPS.length) { if (Number(k) - 1 !== mapIndex) loadMap(Number(k) - 1); return; }
+    if (['arrowleft', 'arrowup'].includes(k)) { e.preventDefault(); loadMap(mapIndex - 1); return; }
+    if (['arrowright', 'arrowdown'].includes(k)) { e.preventDefault(); loadMap(mapIndex + 1); return; }
+  }
+  keys.add(k);
+});
+window.addEventListener('keyup', e => keys.delete(eventKey(e)));
+window.addEventListener('blur', () => { clearInput(); pause(); }); document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+for (const b of document.querySelectorAll('[data-key]')) { b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); touchKeys.set(e.pointerId, b.dataset.key); }); const end = e => touchKeys.delete(e.pointerId); b.addEventListener('pointerup', end); b.addEventListener('pointercancel', end); b.addEventListener('lostpointercapture', end); }
+let audioCtx = null, soundOn = false;
+function wakeAudio() { if (soundOn) { audioCtx ??= new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume().catch(() => { }); } }
+function chime(level = 1) { if (!soundOn || !audioCtx) return; for (let i = 0; i < level; i++) { const osc = audioCtx.createOscillator(), gain = audioCtx.createGain(); osc.type = 'sine'; osc.frequency.value = 440 * Math.pow(1.25, i); gain.gain.setValueAtTime(0, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(.08, audioCtx.currentTime + .015 + i * .1); gain.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + .35 + i * .1); osc.connect(gain).connect(audioCtx.destination); osc.start(audioCtx.currentTime + i * .1); osc.stop(audioCtx.currentTime + .4 + i * .1); } }
+$('#sound').addEventListener('click', () => { soundOn = !soundOn; $('#sound').textContent = soundOn ? '소리 ON' : '소리 OFF'; $('#sound').setAttribute('aria-label', soundOn ? '사운드 끄기' : '사운드 켜기'); wakeAudio(); chime(); });
+
+const heroTarget = new THREE.Vector3(), camTarget = new THREE.Vector3(), lookTarget = new THREE.Vector3(), camForward = new THREE.Vector3(0, 0, -1), tmp = new THREE.Vector3();
+function updateHero(dt) {
+  const t = worldTime;
+  if (mode === 'menu') {
+    const phase = t * .65, swing = Math.sin(phase);
+    worldPoint(48 - swing * 6, 3 + swing * 3, 52 - Math.cos(phase * 2) * 2, hero.position); hero.scale.setScalar(1.75);
+    const f = frameAt(course, 48); hero.rotation.y = f.heading;
+    animateRunner(runner, { x: 0, vx: Math.cos(phase) * 7, vy: Math.sin(phase * 2) * 18, vz: -30, anchor: { x: 26 }, tension: .7 }, dt, t, { menu: true });
+    hero.rotation.y += f.heading;
+    cableOutlet.getWorldPosition(cableOrigin); setRope(cableOrigin.x, cableOrigin.y, cableOrigin.z, menuAnchor.x, menuAnchor.y, menuAnchor.z); rope.visible = true; ropes.left.visible = false; rope.material.color.set(env.rope);
+  } else {
+    heroTarget.set(player.x, player.y, player.z); hero.position.lerp(heroTarget, 1 - Math.exp(-24 * dt)); hero.scale.setScalar(1.2);
+    // The rig animates in track-local space, so feed it velocities relative to the current heading.
+    const f = frameAt(course, player.s), vl = player.vx * f.rx + player.vz * f.rz, vf = player.vx * f.tx + player.vz * f.tz;
+    const anchor = player.anchor ? { x: player.lateral + ((player.anchor.x - player.x) * f.rx + (player.anchor.z - player.z) * f.rz) } : null;
+    animateRunner(runner, { x: player.lateral, vx: vl, vy: player.vy, vz: -vf, anchor, hooks: player.hooks, tension: player.tension }, dt, t, { ready: mode === 'countdown' });
+    hero.rotation.y += f.heading;
+    for (const side of ['left', 'right']) {
+      const hook = player.hooks[side], line = ropes[side]; line.visible = !!hook;
+      if (hook) { const a = hook.anchor; runner.cableOutlets[side].getWorldPosition(cableOrigin); setRope(cableOrigin.x, cableOrigin.y, cableOrigin.z, a.x, a.y, a.z, line); line.material.color.set(player.releaseReady ? '#9affd0' : side === 'left' ? '#9be2e4' : env.rope); }
+    }
+  }
+}
+function setRope(x, y, z, ax, ay, az, line = rope) { line.geometry.attributes.position.array.set([x, y, z, ax, ay, az]); line.geometry.attributes.position.needsUpdate = true; }
+function updateCamera(dt) {
+  if (mode === 'menu') {
+    const t = worldTime * .085;
+    const [cs, cl, cy, ls, ll, ly] = menuCamera(); worldPoint(cs + Math.cos(t) * 4, cl + Math.sin(t) * 5, cy + Math.cos(t) * 2, camTarget); worldPoint(ls, ll, ly, lookTarget);
+    camera.position.lerp(camTarget, 1 - Math.exp(-2 * dt)); camera.lookAt(lookTarget); camera.fov = 53;
+  } else {
+    const f = frameAt(course, player.s), speed = Math.hypot(player.vx, player.vy, player.vz);
+    tmp.set(f.tx, 0, f.tz); camForward.lerp(tmp, 1 - Math.exp(-4 * dt)).normalize();
+    const back = 17 + Math.min(8, speed * .11), lateralPull = player.lateral * .15;
+    camTarget.set(player.x - camForward.x * back - f.rx * lateralPull, player.y + 7, player.z - camForward.z * back - f.rz * lateralPull);
+    const horizontal = 1 - Math.exp(-7 * dt);
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, camTarget.x, horizontal);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, camTarget.y, 1 - Math.exp(-(reducedMotion ? 7 : 2.8) * dt));
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, camTarget.z, horizontal);
+    const vl = player.vx * f.rx + player.vz * f.rz;
+    lookTarget.set(player.x + camForward.x * 35 + f.rx * vl * .2, player.y + 1 + (reducedMotion ? 0 : player.vy * .24), player.z + camForward.z * 35 + f.rz * vl * .2); camera.lookAt(lookTarget);
+    if (!reducedMotion) camera.rotateZ(THREE.MathUtils.clamp(-vl * .003, -.055, .055));
+    camera.fov = THREE.MathUtils.lerp(camera.fov, reducedMotion ? 65 : 60 + Math.min(24, speed * .36), 1 - Math.exp(-3 * dt));
+  }
+  streaks.material.opacity = mode === 'playing' && !reducedMotion ? Math.max(0, Math.min(.24, (Math.hypot(player.vx, player.vy, player.vz) - 28) / 180)) : 0;
+  camera.updateProjectionMatrix(); sky.position.copy(camera.position); stars.position.copy(camera.position);
+  tmp.fromArray(env.sunDir).normalize().multiplyScalar(620);
+  sun.position.copy(camera.position).add(tmp); sun.quaternion.copy(camera.quaternion); glow.position.copy(sun.position).addScaledVector(tmp, .002); glow.quaternion.copy(camera.quaternion);
+  const focus = mode === 'menu' ? worldPoint(80, 0, 0, tmp) : tmp.set(player.x, player.y, player.z);
+  const [lx, ly, lz] = env.lightOffset;
+  sunLight.position.set(focus.x + lx, (mode === 'menu' ? frameAt(course, 80).y : player.y) + ly, focus.z + lz); sunLight.target.position.set(focus.x, (mode === 'menu' ? frameAt(course, 80).y : player.ground) + 15, focus.z);
+}
+const particleOffset = new THREE.Vector3();
+function updateParticles(dt) {
+  if (!particles) return;
+  const p = env.particles, arr = particleGeo.attributes.position.array, t = worldTime, half = PARTICLE_BOX / 2;
+  // Snow visibly follows the same crosswind gusts that push the runner.
+  const gust = p.wind && course.wind ? Math.sin((mode === 'menu' ? t : player.windPhase) * Math.PI * 2 / course.wind.period) * course.wind.strength * 3 : 0;
+  const f = frameAt(course, mode === 'menu' ? 0 : player.s);
+  particleOffset.x += (p.drift[0] + gust * f.rx) * dt; particleOffset.y -= p.fall * dt; particleOffset.z += (p.drift[2] + gust * f.rz) * dt;
+  const dx = particleOffset.x, dy = particleOffset.y, dz = particleOffset.z;
+  const cx = camera.position.x - half, cy = camera.position.y - half, cz = camera.position.z - half;
+  for (let i = 0; i < arr.length; i += 3) {
+    const sway = Math.sin(t * .7 + i) * 1.5;
+    arr[i] = cx + (((particleBase[i] + dx + sway - cx) % PARTICLE_BOX) + PARTICLE_BOX) % PARTICLE_BOX;
+    arr[i + 1] = cy + (((particleBase[i + 1] + dy - cy) % PARTICLE_BOX) + PARTICLE_BOX) % PARTICLE_BOX;
+    arr[i + 2] = cz + (((particleBase[i + 2] + dz - cz) % PARTICLE_BOX) + PARTICLE_BOX) % PARTICLE_BOX;
+  }
+  particleGeo.attributes.position.needsUpdate = true;
+}
+let hudClock = 0;
+function updateHookIndicators() {
+  for (const [side, key] of [['left', 'a'], ['right', 'd']]) {
+    const hooked = !!player.hooks[side], waiting = pressed(key) && !hooked;
+    const indicator = $('#' + side + '-hook-state'); indicator.classList.toggle('connected', hooked); indicator.classList.toggle('waiting', waiting);
+    indicator.title = hooked ? '연결됨 · 키를 떼면 해제' : waiting ? '앞쪽 연결점 찾는 중' : '키를 눌러 연결';
+    const button = document.querySelector('[data-key="' + key + '"]'); button.classList.toggle('connected', hooked); button.setAttribute('aria-pressed', String(pressed(key)));
+  }
+}
+function updateHud(dt) {
+  hudClock += dt; if (hudClock < .04) return; hudClock = 0;
+  const total = course.gates.length;
+  $('#timer').textContent = formatTime(player.time); $('#speed').textContent = Math.round(Math.hypot(player.vx, player.vy, player.vz) * 3.6);
+  $('#gate-count').textContent = `GATE ${pad(Math.min(total, player.gate + 1))} / ${pad(total)}`;
+  $('#remaining').replaceChildren(document.createTextNode(Math.max(0, Math.round(course.length - player.s)).toLocaleString() + ' '), Object.assign(document.createElement('small'), { textContent: 'm' }));
+  const next = course.gates[player.gate]; $('#distance').textContent = next ? Math.max(0, Math.round(next.s - player.s)) + ' m' : 'FINISH';
+  $('#progress-fill').style.width = Math.max(0, Math.min(100, player.s / course.length * 100)) + '%';
+  $('#web-status').textContent = player.releaseReady ? '지금 놓기!  ↗' : player.anchor ? (player.vy < 0 ? '하강 · 속도를 모으는 중' : player.forwardSpeed < 0 ? '다시 누르면 앞쪽 연결점에 연결' : '상승 중 · 조금 더 기다리기') : '공중 비행 · A / D로 연결';
+  $('#web-status').style.color = player.releaseReady ? '#9affd0' : ''; $('#web-meter-fill').style.background = player.releaseReady ? '#9affd0' : ''; $('#web-meter-fill').style.width = (player.tension * 100) + '%';
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  const elapsed = (now - last) / 1000, dt = Math.min(elapsed, .1); last = now;
+  // A dropped frame may slow simulation, but must never award a faster race time.
+  if (mode === 'playing') player.time += Math.max(0, elapsed - dt);
+  if (mode !== 'paused') worldTime += dt;
+  if (mode === 'countdown') {
+    countdown -= dt; $('#countdown').textContent = Math.max(1, Math.ceil(countdown));
+    if (countdown <= 0) { mode = 'playing'; hide('#countdown'); toast('GO! A / D로 훅을 걸어.', 2); chime(); }
+  }
+  if (mode === 'playing') {
+    accumulator += dt;
+    const input = { leftHook: pressed('a') || pressed('arrowleft'), rightHook: pressed('d') || pressed('arrowright'), forward: pressed('w') || pressed('arrowup'), back: pressed('s') || pressed('arrowdown') };
+    while (accumulator >= 1 / 120 && mode === 'playing') {
+      const event = step(player, input, 1 / 120); accumulator -= 1 / 120;
+      if (player.attached) { cueRunner(runner, 'catch'); hookFlash = 1; const a = (player.hooks.right || player.hooks.left).anchor; hookPulse.position.set(a.x, a.y, a.z); }
+      if (player.released && !player.anchor) cueRunner(runner, 'release');
+      if (event === 'gate') { world.gates[player.gate - 1].visible = false; toast(`CHECKPOINT ${pad(player.gate)}  /  ${pad(course.gates.length)}`, 1.7); chime(); }
+      if (event === 'recover') { resetRunner(runner); hero.position.set(player.x, player.y, player.z); const f = frameAt(course, player.s); camForward.set(f.tx, 0, f.tz); camera.position.set(player.x - f.tx * 23, player.y + 7, player.z - f.tz * 23); toast('마지막 체크포인트로 복귀 · +3초', 2.5); }
+      if (event === 'finish') { world.gates.at(-1).visible = false; finish(); }
+    }
+  }
+  if (mode !== 'paused') {
+    updateHero(dt); updateCamera(dt); updateParticles(dt);
+    sky.material.uniforms.time.value = worldTime;
+    hookFlash = Math.max(0, hookFlash - dt * 2.5); hookPulse.visible = mode === 'playing' && hookFlash > 0; hookPulse.material.opacity = hookFlash; hookPulse.scale.setScalar(1 + (1 - hookFlash) * 3); hookPulse.quaternion.copy(camera.quaternion);
+    world.update(dt, worldTime);
+    world.anchorMarkers.forEach((m, i) => { m.rotation.y = worldTime; const current = Object.values(player.hooks).some(h => h?.anchor === course.anchors[i]); m.scale.setScalar(current ? 1.8 : 1); });
+  }
+  if (['playing', 'countdown'].includes(mode)) { updateHud(dt); updateHookIndicators(); }
+  if (worldTime > toastUntil) $('#toast').style.opacity = 0;
+  renderer.render(scene, camera);
+}
+window.addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7)); });
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); pause(); $('#loading').textContent = '3D 화면 연결이 끊겼습니다. 페이지를 새로고침해 주세요.'; show('#loading'); });
+let initial = 0;
+try { initial = Math.max(0, MAPS.findIndex(m => m.id === localStorage.getItem('skyhook.selectedMap'))); } catch { }
+loadMap(initial);
+hide('#loading'); requestAnimationFrame(frame);
