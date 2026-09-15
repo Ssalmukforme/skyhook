@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 // Two builds from one codebase:
 //   npm run build              -> dist/            own site: / (Korean) and /en/ (English), Adsterra banners, Google Fonts
 //   npm run build:crazygames   -> dist-crazygames/ CrazyGames portal: one English page, CrazyGames SDK, fonts bundled, relative paths
+//   npm run build:crazygames:full -> same, with map 07 locked behind a rewarded ad (for Full Launch; Basic Launch has no ads)
 const FONT_IMPORTS = [
   '@fontsource/noto-sans-kr/latin-400.css', '@fontsource/noto-sans-kr/latin-500.css', '@fontsource/noto-sans-kr/latin-600.css',
   '@fontsource/noto-sans-kr/latin-700.css', '@fontsource/noto-sans-kr/latin-800.css',
@@ -37,11 +38,14 @@ function platformBuild(crazygames) {
 }
 
 export default defineConfig(({ mode }) => {
-  const crazygames = mode === 'crazygames';
+  const crazygames = mode === 'crazygames' || mode === 'crazygames-full';
   return {
     base: crazygames ? './' : '/',
     publicDir: crazygames ? false : 'public',
-    define: { 'import.meta.env.VITE_PLATFORM': JSON.stringify(crazygames ? 'crazygames' : 'web') },
+    define: {
+      'import.meta.env.VITE_PLATFORM': JSON.stringify(crazygames ? 'crazygames' : 'web'),
+      'import.meta.env.VITE_MAP_LOCKS': JSON.stringify(mode === 'crazygames-full' ? 'on' : 'off'),
+    },
     plugins: [platformBuild(crazygames)],
     // supabase-js is imported lazily, so list it for dev pre-bundling.
     optimizeDeps: { noDiscovery: true, include: ['@supabase/supabase-js'] },

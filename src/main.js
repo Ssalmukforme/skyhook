@@ -3,7 +3,7 @@ import { createRunner, animateRunner, cueRunner, resetRunner } from './runner.js
 import './style.css';
 import 'virtual:skyhook-fonts';
 import { MAPS } from './maps.js';
-import { COURSES, createPlayer, step, formatTime, cleanRecords, frameAt, headingOf } from './physics.js';
+import { COURSES, createPlayer, step, formatTime, cleanRecords, frameAt, headingOf, locate } from './physics.js';
 import { buildWorld } from './worlds.js';
 import { fetchBoard, submitRun, describeError } from './leaderboard.js';
 import { t as tr, localizeMaps } from './i18n.js';
@@ -141,9 +141,10 @@ function drawRoute(svg, c, width, height, detailed) {
 const withDirection = name => { const code = name.charCodeAt(name.length - 1) - 0xAC00, final = code >= 0 && code < 11172 ? code % 28 : 0; return name + (final === 0 || final === 8 ? '로' : '으로'); };
 function storedBest(m) { try { return cleanRecords(JSON.parse(store.getItem(m.recordKey) || '[]'))[0]?.time; } catch { return undefined; } }
 const starText = m => '★'.repeat(m.difficulty) + '☆'.repeat(Math.max(0, 3 - m.difficulty));
-// On CrazyGames the last map is locked. It opens for good when the player watches one rewarded ad, or,
-// without any ad (the portal requires a non-ad way), once every other map has been finished. The own site locks nothing.
-const LOCKED_MAPS = new Set(PLATFORM === 'crazygames' ? ['jungle'] : []);
+// In the CrazyGames Full Launch build (npm run build:crazygames:full) the last map is locked. It opens for good when the
+// player watches one rewarded ad, or, without any ad (the portal requires a non-ad way), once every other map has been finished.
+// Basic Launch has no ads, so that build and the own site lock nothing.
+const LOCKED_MAPS = new Set(PLATFORM === 'crazygames' && import.meta.env?.VITE_MAP_LOCKS === 'on' ? ['jungle'] : []);
 function flag(key) { try { return store.getItem(key) === '1'; } catch { return false; } }
 // A map counts as finished once a run reached its goal (or a time for it was saved before this flag existed).
 const isCleared = m => flag(`skyhook.cleared.${m.id}`) || storedBest(m) !== undefined;
@@ -550,6 +551,8 @@ let initial = 0;
 try { initial = Math.max(0, MAPS.findIndex(m => m.id === store.getItem('skyhook.selectedMap'))); } catch { }
 loadMap(initial);
 hide('#loading'); requestAnimationFrame(frame); loadingStop();
+// Dev server only (stripped from builds): lets capture scripts read the run, e.g. to autopilot trailer footage.
+if (import.meta.env.DEV) window.__skyhook = { state: () => ({ mode, player, course }), locate };
 onMuteSetting(muted => { if (muted && soundOn) $('#sound').click(); $('#sound').disabled = muted; });
 playerName().then(name => { try { if (name && !store.getItem('skyhook.nickname')) $('#nickname').value = name.slice(0, 16); } catch { } });
 // CrazyGames players land directly in a run on the map they last had selected; the menu is one pause away.

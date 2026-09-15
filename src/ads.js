@@ -50,7 +50,7 @@ function fill(slot) {
     // The SDK refuses containers that are not fully on screen yet, so wait for the screen to finish appearing.
     const collapse = () => { if (box.isConnected) { slot.replaceChildren(); slot.classList.remove('filled'); loaded.delete(slot); } };
     setTimeout(() => {
-      if (!box.isConnected || !slot.checkVisibility({ opacityProperty: true })) { collapse(); return; }
+      if (!box.isConnected || !isShown(slot)) { collapse(); return; }
       requestBanner(box.id, unit.width, unit.height).then(ok => { if (!ok) collapse(); });
     }, 600);
   } else if (unit.code.trim()) slot.append(frame(unit));
@@ -68,6 +68,8 @@ function releaseFocus() {
   if (active?.tagName === 'IFRAME' && active.closest('.ad-slot')) { active.blur(); window.focus(); }
 }
 
+// element.checkVisibility() is missing before Safari 17.4; a box with no layout (display:none ancestor) has no client rects.
+const isShown = el => (el.checkVisibility ? el.checkVisibility({ opacityProperty: true }) : el.getClientRects().length > 0);
 const slots = [...document.querySelectorAll('.ad-slot[data-ad]')];
 const observer = new IntersectionObserver(entries => entries.forEach(e => e.isIntersecting && fill(e.target)));
 slots.forEach(slot => { observer.observe(slot); slot.addEventListener('pointerleave', releaseFocus); });
@@ -76,5 +78,5 @@ updateSideMargins();
 let resizeTimer = 0;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { updateSideMargins(); slots.forEach(slot => { if (slot.checkVisibility()) fill(slot); }); }, 200);
+  resizeTimer = setTimeout(() => { updateSideMargins(); slots.forEach(slot => { if (isShown(slot)) fill(slot); }); }, 200);
 });
