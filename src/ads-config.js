@@ -27,6 +27,6 @@ export const AD_SLOTS = {
   result: { width: 468, height: 60, code: BANNER_468, mobile: { width: 320, height: 50, code: BANNER_320 } },
   // During a run on phones: right under the touch pads. Nothing on wider screens.
   play: { width: 0, height: 0, code: ``, mobile: { width: 320, height: 50, code: BANNER_320 } },
-  // Wide screens: one skyscraper in each side margin. The game view shrinks to sit between them, so they never cover it.
+  // Wide screens: one skyscraper over each side of the full-screen game (menu and HUD text move inward past them).
   side: { width: 160, height: 600, code: BANNER_160, media: '(min-width: 1440px) and (min-height: 680px)' },
 };

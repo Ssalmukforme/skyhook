@@ -41,14 +41,8 @@ function fill(slot) {
   loaded.set(slot, { size, at: performance.now() });
 }
 
-// Side skyscrapers get their own margins: body.side-ads narrows the game view (canvas, menu, HUD) to sit
-// between them, and a resize event lets the renderer pick up the new canvas size.
-function updateSideMargins() {
-  const on = !!unitFor('side');
-  if (document.body.classList.contains('side-ads') === on) return;
-  document.body.classList.toggle('side-ads', on);
-  window.dispatchEvent(new Event('resize'));
-}
+// Side skyscrapers float over the edges of the game; body.side-ads moves the menu and HUD text inward past them.
+function updateSideMargins() { document.body.classList.toggle('side-ads', !!unitFor('side')); }
 
 // Clicking a banner moves keyboard focus into its iframe, which would swallow A/D/Enter/Esc.
 // Hand focus back to the game when the pointer leaves the ad or the player returns from the ad's tab.

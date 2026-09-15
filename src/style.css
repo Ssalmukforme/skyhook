@@ -120,10 +120,9 @@ body.touch #wall-warning{font-size:17px;top:42%}
   #records-toggle{min-height:52px;padding:0 16px;border:1px solid #fff3df40;border-radius:3px;background:#1a162466;font-size:13px;white-space:nowrap}
   .menu-footer{order:4;position:static;margin-top:4px;border:0;padding:6px 0 0;justify-content:center}.menu-footer>span:first-child{display:none}.menu-footer .text-button{font-size:12px}
 }
-/* Wide screens: a 160x600 banner in each side margin; the game view (canvas, menu, HUD) sits between them. */
+/* Wide screens: a 160x600 banner over each side of the full-screen game. Only the menu and HUD text move inward so the banners never cover them. */
 .ad-side{position:fixed;top:50%;margin:0;transform:translateY(-50%);z-index:30}.ad-side.left{left:15px}.ad-side.right{right:15px}
-body.side-ads{--gutter:190px;background:#1a1624}
-body.side-ads #world,body.side-ads .vignette,body.side-ads #menu,body.side-ads #hud,body.side-ads #countdown,body.side-ads #loading{left:var(--gutter);right:var(--gutter);width:calc(100% - 2 * var(--gutter))}
+body.side-ads #menu,body.side-ads #hud{left:190px;right:190px}
 /* Phones during a run: a 320x50 banner at the very bottom, the touch pads sitting right on top of it. */
 .ad-play{position:absolute;left:50%;bottom:env(safe-area-inset-bottom);margin:0;transform:translateX(-50%);pointer-events:auto}
 body.touch #hud:has(.ad-play.filled) #touch-controls{bottom:calc(50px + env(safe-area-inset-bottom));padding-bottom:0}
