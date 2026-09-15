@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { frameAt } from './physics.js';
+import { createCollider, solidMeshes } from './collider.js';
 
 // Lighting, sky and particle palette per theme. Sunset keeps the original values.
 export const ENVIRONMENTS = {
@@ -131,9 +132,11 @@ function bake(kit, instanceMaterials) {
 }
 
 function makeLabel(text, color) {
-  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
-  const ctx = c.getContext('2d'); ctx.font = '600 64px Arial'; ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 256, 64);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false })); sprite.scale.set(16, 4, 1); return sprite;
+  // Without a DOM (node tests building worlds for collision) labels are simply blank.
+  const c = typeof document === 'undefined' ? null : document.createElement('canvas'), ctx = c?.getContext('2d');
+  if (c) { c.width = 512; c.height = 128; }
+  if (ctx) { ctx.font = '600 64px Arial'; ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 256, 64); }
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: c ? new THREE.CanvasTexture(c) : null, transparent: true, depthWrite: false })); sprite.scale.set(16, 4, 1); return sprite;
 }
 
 function birds(kit, count, color, heightMin, heightMax) {
@@ -144,7 +147,7 @@ function birds(kit, count, color, heightMin, heightMax) {
     const f = frameAt(course, range(0, course.length)), side = Math.random() > .5 ? 1 : -1;
     const center = new THREE.Vector3(f.x + f.rx * side * range(60, 160), f.y + range(heightMin, heightMax), f.z + f.rz * side * range(60, 160));
     b.userData = { center, radius: range(20, 70), speed: range(.08, .2) * (i % 2 ? 1 : -1), phase: range(0, 6.28) };
-    root.add(b); list.push(b);
+    b.userData.nonSolid = true; root.add(b); list.push(b);
   }
   kit.updaters.push((dt, t) => list.forEach((b, i) => {
     const u = b.userData, a = u.phase + t * u.speed;
@@ -220,7 +223,7 @@ function sunset(kit) {
     const car = new THREE.Group(), side = i % 2 ? 1 : -1, color = ['#d6ab85', '#8b929a', '#af777a', '#d6bf9d', '#677b89'][i % 5];
     box(0, 0, 0, 2, 1, 4.4, color, car); box(0, .65, .15, 1.8, .8, 2.3, '#69677a', car);
     for (const x of [-1, 1]) for (const z of [-1.3, 1.3]) box(x, -.3, z, .22, .6, .65, '#454455', car);
-    car.position.set(side * (i % 3 ? 8 : 13), .7, range(-1250, 140)); car.userData = { speed: range(3, 8) * side }; root.add(car); cars.push(car);
+    car.position.set(side * (i % 3 ? 8 : 13), .7, range(-1250, 140)); car.userData = { speed: range(3, 8) * side }; car.userData.nonSolid = true; root.add(car); cars.push(car);
   }
   kit.updaters.push(dt => cars.forEach(c => { c.position.z += c.userData.speed * dt; if (c.position.z > 140) c.position.z = -1250; if (c.position.z < -1250) c.position.z = 140; }));
   box(93, 62, -240, 2, 124, 2, '#b58b78'); box(70, 121, -240, 72, 1.5, 1.5, '#c79b7b'); box(41, 106, -240, .12, 30, .12, '#8b6c72');
@@ -298,7 +301,7 @@ function harbor(kit) {
   for (let s = -60; s < end; s += 10) for (const side of [-1, 1]) { const g = at(s, side * (hw + 8), 1.4); box(0, .6, 0, .5, 1.2, .5, glowMat(s % 20 ? '#3ff3ff' : '#ff4fd8', 1.5), g); }
   // A slowly turning ferris wheel on the outside of the big bend.
   const wheelFrame = frameAt(course, course.length * .36), wheel = new THREE.Group(), hub = new THREE.Group();
-  wheel.position.set(wheelFrame.x - wheelFrame.rx * 150, 0, wheelFrame.z - wheelFrame.rz * 150); wheel.rotation.y = wheelFrame.heading + Math.PI / 2; root.add(wheel);
+  wheel.position.set(wheelFrame.x - wheelFrame.rx * 150, 0, wheelFrame.z - wheelFrame.rz * 150); wheel.rotation.y = wheelFrame.heading + Math.PI / 2; root.add(wheel); wheel.userData.nonSolid = true;
   hub.position.y = 78; wheel.add(hub);
   hub.add(new THREE.Mesh(new THREE.TorusGeometry(62, .9, 6, 48), glowMat('#ff4fd8', 1.3)));
   hub.add(new THREE.Mesh(new THREE.TorusGeometry(58, .5, 6, 48), glowMat('#3ff3ff', 1.1)));
@@ -314,7 +317,7 @@ function harbor(kit) {
     const b = new THREE.Group(), color = pick(neon);
     box(0, 0, 0, 3.4, 1.3, 10, '#e9e4f5', b, true); box(0, 1.2, .8, 2.6, 1.3, 4.5, '#2b2744', b); box(0, .1, -5.05, 3.5, .25, .1, glowMat(color, 2), b);
     box(0, 1.2, -1.5, 2.7, .3, .1, glowMat(color, 1.5), b);
-    root.add(b); boats.push({ obj: b, s: range(-60, end - 40), lateral: (i % 2 ? 1 : -1) * range(6, 14), speed: (i % 2 ? -1 : 1) * range(5, 11) });
+    b.userData.nonSolid = true; root.add(b); boats.push({ obj: b, s: range(-60, end - 40), lateral: (i % 2 ? 1 : -1) * range(6, 14), speed: (i % 2 ? -1 : 1) * range(5, 11) });
   }
   kit.updaters.push((dt, t) => boats.forEach((b, i) => {
     b.s += b.speed * dt; if (b.s > end - 30) b.s = -60; if (b.s < -60) b.s = end - 30;
@@ -522,7 +525,7 @@ function garden(kit) {
     const fluke = new THREE.Mesh(cube, mat('#8ab8e6')); fluke.scale.set(16, .8, 6); fluke.position.z = 3; tail.add(fluke);
     for (const s of [-1, 1]) { const fin = new THREE.Mesh(cube, mat('#8ab8e6')); fin.scale.set(10, .6, 4); fin.position.set(s * 10, -2, -4); fin.rotation.z = s * -.3; w.add(fin); }
     w.userData = { radius: 260 + i * 90, y: bounds.maxY + 110 + i * 25, speed: .03 + i * .008, phase: i * 2.1, tail };
-    root.add(w); whales.push(w);
+    w.userData.nonSolid = true; root.add(w); whales.push(w);
   }
   const balloons = [];
   for (let i = 0; i < 10; i++) {
@@ -530,7 +533,7 @@ function garden(kit) {
     const env = new THREE.Mesh(blob, mat(color)); env.scale.set(6, 7.5, 6); env.position.y = 10; b.add(env);
     const basket = new THREE.Mesh(cube, mat('#8a6a5a')); basket.scale.set(2.2, 1.8, 2.2); b.add(basket);
     const f = frameAt(course, range(0, course.length)), side = i % 2 ? 1 : -1, lateral = side * range(hw + 50, hw + 160);
-    b.position.set(f.x + f.rx * lateral, f.y + range(30, 110), f.z + f.rz * lateral); b.userData.baseY = b.position.y; root.add(b); balloons.push(b);
+    b.position.set(f.x + f.rx * lateral, f.y + range(30, 110), f.z + f.rz * lateral); b.userData.baseY = b.position.y; b.userData.nonSolid = true; root.add(b); balloons.push(b);
   }
   kit.updaters.push((dt, t) => {
     whales.forEach(w => {
@@ -559,6 +562,8 @@ export function buildWorld(map, course) {
   const instanceMaterials = THEMES[map.theme](kit, course, map, env) || {};
   bake(kit, instanceMaterials);
   const { root } = kit;
+  // Collide with exactly what is drawn: built now, before gates, markers and other see-through helpers are added.
+  const collider = createCollider(solidMeshes(root));
   const owned = [];
   const gates = course.gates.map((g, i) => {
     const group = new THREE.Group(); group.position.set(g.x, g.y, g.z); group.rotation.y = Math.atan2(-g.tx, -g.tz); root.add(group);
@@ -575,7 +580,7 @@ export function buildWorld(map, course) {
   owned.push(markerMat);
   const anchorMarkers = course.anchors.map(a => { const m = new THREE.Mesh(markerGeo, markerMat); m.position.set(a.x, a.y, a.z); root.add(m); return m; });
   return {
-    root, env, gates, anchorMarkers,
+    root, env, gates, anchorMarkers, collider,
     update(dt, t) { kit.updaters.forEach(u => u(dt, t)); },
     dispose() {
       root.traverse(o => {

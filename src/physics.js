@@ -3,6 +3,9 @@ import { MAPS } from './maps.js';
 const STEP = 2;
 // Light air drag, identical in every direction: nothing steers the runner away from walls.
 const AIR_DRAG = .025;
+// Radius of the runner's body used against real scenery geometry (collider.js).
+export const BODY_RADIUS = .6;
+
 const smooth = t => t * t * (3 - 2 * t);
 
 // Centripetal Catmull-Rom keeps tight control points from overshooting into loops.
@@ -164,7 +167,9 @@ export function recover(p, reason = 'fall') {
   place(p, c, gate ? gate.s + 8 : 0, gate ? gate.lateral : 0, 57);
   p.time += 3; p.falls++; p.recoverReason = reason;
 }
-export function step(p, input, dt) {
+// world (optional): { hits(x, y, z, radius) } testing the drawn map geometry. There is no invisible corridor wall:
+// the runner only crashes into objects that actually exist. Node tests without a world simply fly through open air.
+export function step(p, input, dt, world = null) {
   if (p.done) return null;
   const c = p.course;
   p.time += dt;
@@ -212,7 +217,6 @@ export function step(p, input, dt) {
   p.tension = Math.max(0, ...hooks.map(h => h.tension));
   loc = locate(c, p.x, p.z, loc.i);
   // Corridor walls follow the curve. Touching one is a crash: no sliding assist, straight back to the last checkpoint.
-  if (Math.abs(loc.lateral) > c.halfWidth) { recover(p, 'wall'); return 'recover'; }
   p.s = loc.s; p.lateral = loc.lateral; p.ground = loc.ground; p.trackIndex = loc.i;
   p.forwardSpeed = p.vx * loc.tx + p.vz * loc.tz;
   p.releaseReady = !!p.anchor && p.s > p.anchor.s + 12 && p.y > p.ground + 30 && p.vy > 10 && p.forwardSpeed > 8;
@@ -232,6 +236,8 @@ export function step(p, input, dt) {
   }
   if (gate && p.s > gate.s + 48) { recover(p, 'missed'); return 'recover'; }
   if (p.y < p.ground + 4 || p.y > p.ground + 160 || p.s < -60) { recover(p, 'fall'); return 'recover'; }
+  // Sample the midpoint too, so a fast frame cannot skip through a thin pole or beam.
+  if (world && (world.hits(p.x, p.y, p.z, BODY_RADIUS) || world.hits((p.x + old.x) / 2, (p.y + old.y) / 2, (p.z + old.z) / 2, BODY_RADIUS))) { recover(p, 'obstacle'); return 'recover'; }
   return null;
 }
 export function formatTime(seconds) { const ms = Math.max(0, Math.floor(seconds * 1000)); return `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`; }

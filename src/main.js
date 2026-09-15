@@ -384,9 +384,9 @@ function updateHud(dt) {
   $('#gate-count').textContent = `GATE ${pad(Math.min(total, player.gate + 1))} / ${pad(total)}`;
   $('#remaining').replaceChildren(document.createTextNode(Math.max(0, Math.round(course.length - player.s)).toLocaleString() + ' '), Object.assign(document.createElement('small'), { textContent: 'm' }));
   const next = course.gates[player.gate]; $('#distance').textContent = next ? Math.max(0, Math.round(next.s - player.s)) + ' m' : 'FINISH';
-  // Walls are lethal now, so warn before the runner reaches one.
-  const wallGap = course.halfWidth - Math.abs(player.lateral), warn = $('#wall-warning');
-  warn.hidden = wallGap > 6; if (!warn.hidden) { warn.textContent = player.lateral > 0 ? '벽 주의 ▶' : '◀ 벽 주의'; warn.classList.toggle('right', player.lateral > 0); warn.classList.toggle('danger', wallGap < 2.5); }
+  // Warn about the nearest real object (building, rock, tree...), on the side where it actually is.
+  const near = world.collider.nearest(player.x, player.y, player.z, 6.6), warn = $('#wall-warning');
+  warn.hidden = !near; if (near) { const { hx, hz } = headingOf(player), right = (near.x - player.x) * -hz + (near.z - player.z) * hx > 0; warn.textContent = right ? '충돌 주의 ▶' : '◀ 충돌 주의'; warn.classList.toggle('right', right); warn.classList.toggle('danger', near.distance < 3.1); }
   $('#progress-fill').style.width = Math.max(0, Math.min(100, player.s / course.length * 100)) + '%';
   $('#web-status').textContent = player.releaseReady ? '지금 놓기!  ↗' : player.anchor ? (player.vy < 0 ? '하강 · 속도를 모으는 중' : player.forwardSpeed < 0 ? '다시 누르면 앞쪽 연결점에 연결' : '상승 중 · 조금 더 기다리기') : '공중 비행 · A / D로 연결';
   $('#web-status').style.color = player.releaseReady ? '#9affd0' : ''; $('#web-meter-fill').style.background = player.releaseReady ? '#9affd0' : ''; $('#web-meter-fill').style.width = (player.tension * 100) + '%';
@@ -405,11 +405,11 @@ function frame(now) {
     accumulator += dt;
     const input = { leftHook: pressed('a') || pressed('arrowleft'), rightHook: pressed('d') || pressed('arrowright'), forward: pressed('w') || pressed('arrowup'), back: pressed('s') || pressed('arrowdown') };
     while (accumulator >= 1 / 120 && mode === 'playing') {
-      const event = step(player, input, 1 / 120); accumulator -= 1 / 120;
+      const event = step(player, input, 1 / 120, world.collider); accumulator -= 1 / 120;
       if (player.attached) { cueRunner(runner, 'catch'); hookFlash = 1; const a = (player.hooks.right || player.hooks.left).anchor; hookPulse.position.set(a.x, a.y, a.z); }
       if (player.released && !player.anchor) cueRunner(runner, 'release');
       if (event === 'gate') { world.gates[player.gate - 1].visible = false; toast(`CHECKPOINT ${pad(player.gate)}  /  ${pad(course.gates.length)}`, 1.7); chime(); }
-      if (event === 'recover') { resetRunner(runner); hero.position.set(player.x, player.y, player.z); const f = frameAt(course, player.s); camForward.set(f.tx, 0, f.tz); camera.position.set(player.x - f.tx * 23, player.y + 7, player.z - f.tz * 23); toast(`${({ wall: '벽에 부딪혔어요', missed: '게이트를 놓쳤어요' })[player.recoverReason] ?? '추락'} · 마지막 체크포인트로 복귀 · +3초`, 2.5); }
+      if (event === 'recover') { resetRunner(runner); hero.position.set(player.x, player.y, player.z); const f = frameAt(course, player.s); camForward.set(f.tx, 0, f.tz); camera.position.set(player.x - f.tx * 23, player.y + 7, player.z - f.tz * 23); toast(`${({ obstacle: '부딪혔어요', missed: '게이트를 놓쳤어요' })[player.recoverReason] ?? '추락'} · 마지막 체크포인트로 복귀 · +3초`, 2.5); }
       if (event === 'finish') { world.gates.at(-1).visible = false; finish(); }
     }
   }
