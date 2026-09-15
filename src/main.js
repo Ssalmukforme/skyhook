@@ -107,7 +107,7 @@ function loadRecords() {
   try { records = cleanRecords(JSON.parse(localStorage.getItem(map.recordKey) || '[]')); storageWorks = true; } catch { records = []; storageWorks = false; }
   refreshBest();
 }
-function refreshBest() { const best = records.length ? formatTime(records[0].time) : '--:--.---'; $('#best').textContent = best; $('#best-hud').textContent = 'BEST ' + best + (worldRecord ? ' · 1위 ' + formatTime(worldRecord) : ''); refreshRowBests(); }
+function refreshBest() { const best = records.length ? formatTime(records[0].time) : '--:--.---'; $('#best').textContent = best; $('#best-hud').textContent = 'BEST ' + best + (worldRecord ? ' · 1위 ' + formatTime(worldRecord) : ''); }
 // Top-down route sketch generated from the real centerline.
 function drawRoute(svg, c, width, height, detailed) {
   const pts = []; for (let s = -20; s <= c.length + 20; s += 10) { const f = frameAt(c, s); pts.push([f.x, f.z]); }
@@ -131,38 +131,78 @@ function drawRoute(svg, c, width, height, detailed) {
   el('circle', { cx: fx, cy: fy, r: detailed ? 4.5 : 2.2, class: 'map-finish' });
 }
 const withDirection = name => { const code = name.charCodeAt(name.length - 1) - 0xAC00, final = code >= 0 && code < 11172 ? code % 28 : 0; return name + (final === 0 || final === 8 ? '로' : '으로'); };
-const mapRows = MAPS.map((m, i) => {
-  const row = document.createElement('button'); row.type = 'button'; row.className = 'map-row'; row.setAttribute('role', 'option'); row.style.setProperty('--row-accent', m.accent);
-  const no = Object.assign(document.createElement('span'), { className: 'row-no', textContent: m.no });
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 50 30'); svg.setAttribute('class', 'row-route'); svg.setAttribute('aria-hidden', 'true'); drawRoute(svg, COURSES[m.id], 50, 30, false);
-  const info = Object.assign(document.createElement('span'), { className: 'row-info' });
-  info.append(Object.assign(document.createElement('span'), { className: 'row-name', textContent: m.name }), Object.assign(document.createElement('span'), { className: 'row-trait', textContent: m.trait }));
-  const meta = Object.assign(document.createElement('span'), { className: 'row-meta' });
-  meta.append(Object.assign(document.createElement('span'), { className: 'row-stars', textContent: '★'.repeat(m.difficulty) + '☆'.repeat(3 - m.difficulty) }), Object.assign(document.createElement('span'), { className: 'row-best' }));
-  row.append(no, svg, info, meta);
-  // First click previews the district; clicking the selected one again starts the run.
-  row.addEventListener('click', () => { if (i === mapIndex) begin(); else loadMap(i); });
-  $('#map-list').append(row); return row;
-});
 function storedBest(m) { try { return cleanRecords(JSON.parse(localStorage.getItem(m.recordKey) || '[]'))[0]?.time; } catch { return undefined; } }
-function refreshRowBests() {
-  MAPS.forEach((m, i) => { const best = m === map ? records[0]?.time : storedBest(m), label = mapRows[i].querySelector('.row-best'); label.textContent = best ? formatTime(best) : '기록 없음'; label.classList.toggle('none', !best); });
-}
+const starText = m => '★'.repeat(m.difficulty) + '☆'.repeat(Math.max(0, 3 - m.difficulty));
 function renderMapCard() {
-  $('#map-count').textContent = `${map.no} / ${pad(MAPS.length)}`;
-  $('#map-name').textContent = map.name; $('#map-en').textContent = map.en; $('#map-tagline').textContent = map.tagline;
+  $('#map-count').textContent = `${map.no} / ${pad(MAPS.length)}`; $('#map-total').textContent = pad(MAPS.length); $('#footer-map-count').textContent = pad(MAPS.length);
+  $('#map-name').textContent = map.name; $('#map-en').textContent = map.en; $('#map-tagline').textContent = map.tagline; $('#map-trait').textContent = map.trait;
   $('#map-length').replaceChildren(document.createTextNode((course.length / 1000).toFixed(2)), Object.assign(document.createElement('span'), { textContent: ' km' }));
   $('#map-gates').replaceChildren(document.createTextNode(course.gates.length), Object.assign(document.createElement('span'), { textContent: ' GATES' }));
-  $('#map-difficulty').replaceChildren(document.createTextNode('★'.repeat(map.difficulty)), Object.assign(document.createElement('span'), { textContent: ' ☆'.repeat(3 - map.difficulty) }));
+  $('#map-difficulty').replaceChildren(document.createTextNode('★'.repeat(map.difficulty)), Object.assign(document.createElement('span'), { textContent: ' ☆'.repeat(Math.max(0, 3 - map.difficulty)) }));
   drawRoute($('#map-svg'), course, 300, 120, true); $('#map-svg').setAttribute('aria-label', `${map.name} 코스 약도`);
-  const rowFocused = mapRows.includes(document.activeElement);
-  mapRows.forEach((row, i) => { row.setAttribute('aria-selected', String(i === mapIndex)); row.title = i === mapIndex ? `${map.name} · 한 번 더 누르면 출발` : `${MAPS[i].name} 선택`; });
-  const selected = mapRows[mapIndex]; if (rowFocused) selected.focus(); selected.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   $('#start-label').textContent = `${withDirection(map.name)} 출발`;
   $('#hud-district').textContent = 'DISTRICT ' + map.no; $('#hud-name').textContent = map.name;
   $('#result-course').textContent = map.name + ' · 완주 기록';
   $('#remaining').replaceChildren(document.createTextNode(course.length.toLocaleString() + ' '), Object.assign(document.createElement('small'), { textContent: 'm' }));
-}function hide(id) { $(id).classList.add('hidden'); } function show(id) { $(id).classList.remove('hidden'); }
+  mapTiles.forEach((tile, i) => tile.el.setAttribute('aria-selected', String(i === mapIndex)));
+}
+
+// Full map browser: a scrollable, searchable grid so the menu card stays one map tall however many maps exist.
+const el = (tag, className, text) => Object.assign(document.createElement(tag), className ? { className } : {}, text !== undefined ? { textContent: text } : {});
+const mapTiles = MAPS.map((m, i) => {
+  const c = COURSES[m.id], tile = el('div', 'map-tile'); tile.setAttribute('role', 'option'); tile.style.setProperty('--tile-accent', m.accent);
+  const pick = el('button', 'tile-pick'); pick.type = 'button'; pick.setAttribute('aria-label', `${m.name} 선택`);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 200 80'); svg.setAttribute('class', 'tile-route'); svg.setAttribute('aria-hidden', 'true'); drawRoute(svg, c, 200, 80, false);
+  const head = el('span', 'tile-head'); head.append(el('span', 'tile-no', m.no), el('span', 'tile-stars', starText(m)));
+  const title = el('span', 'tile-title'); title.append(el('strong', '', m.name), el('small', '', m.en));
+  const facts = el('span', 'tile-facts', `${(c.length / 1000).toFixed(2)} km · ${c.gates.length} GATES`);
+  const times = el('span', 'tile-times'); const mine = el('span', 'tile-best'), top = el('span', 'tile-world', '전체 1위 …'); times.append(mine, top);
+  pick.append(svg, head, title, el('span', 'tile-trait', m.trait), facts, times);
+  const go = el('button', 'tile-go', '출발 ↗'); go.type = 'button'; go.setAttribute('aria-label', `${m.name} 바로 출발`);
+  tile.append(pick, go); $('#map-grid').append(tile);
+  pick.addEventListener('click', () => { closeBrowser(); if (i !== mapIndex) loadMap(i); $('#start').focus(); });
+  go.addEventListener('click', () => { closeBrowser(); if (i !== mapIndex) loadMap(i); begin(); });
+  return { el: tile, pick, map: m, mine, top, loaded: false };
+});
+const browserFilter = { text: '', difficulty: 0 };
+function visibleTiles() { return mapTiles.filter(t => !t.el.hidden); }
+function applyBrowserFilter() {
+  const q = browserFilter.text.trim().toLowerCase();
+  for (const t of mapTiles) {
+    const m = t.map, matchText = !q || [m.name, m.en, m.trait, m.no].some(v => v.toLowerCase().includes(q));
+    t.el.hidden = !(matchText && (!browserFilter.difficulty || m.difficulty === browserFilter.difficulty));
+  }
+  const count = visibleTiles().length;
+  $('#browser-count').textContent = `${count} / ${MAPS.length}`; $('#map-grid-empty').classList.toggle('hidden', count > 0);
+  document.querySelectorAll('[data-difficulty]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.difficulty) === browserFilter.difficulty)));
+}
+// Personal bests are local; world #1 is fetched only for tiles scrolled into view, so a long list stays cheap.
+const tileObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) loadTileWorld(mapTiles.find(t => t.el === entry.target)); }), { root: $('#map-grid') }) : null;
+function loadTileWorld(t, fresh = false) {
+  if (!t || (t.loaded && !fresh)) return; t.loaded = true;
+  fetchBoard(t.map.id, { fresh }).then(data => { const e = data.entries[0]; t.top.textContent = e ? `전체 1위 ${formatTime(e.timeMs / 1000)}` : '전체 1위 아직 없음'; })
+    .catch(() => { t.loaded = false; t.top.textContent = '전체 랭킹 연결 안 됨'; });
+}
+function openBrowser() {
+  for (const t of mapTiles) { const best = t.map === map ? records[0]?.time : storedBest(t.map); t.mine.textContent = best ? `내 기록 ${formatTime(best)}` : '내 기록 없음'; }
+  applyBrowserFilter(); show('#map-browser');
+  if (tileObserver) mapTiles.forEach(t => tileObserver.observe(t.el)); else mapTiles.forEach(t => loadTileWorld(t));
+  const selected = mapTiles[mapIndex]; (selected.el.hidden ? visibleTiles()[0] : selected)?.pick.focus(); selected.el.scrollIntoView({ block: 'nearest' });
+}
+function closeBrowser() { hide('#map-browser'); if (tileObserver) tileObserver.disconnect(); }
+$('#map-browse').addEventListener('click', openBrowser);
+$('#map-prev').addEventListener('click', () => loadMap(mapIndex - 1)); $('#map-next').addEventListener('click', () => loadMap(mapIndex + 1));
+$('#map-search').addEventListener('input', e => { browserFilter.text = e.target.value; applyBrowserFilter(); });
+document.querySelectorAll('[data-difficulty]').forEach(b => b.addEventListener('click', () => { browserFilter.difficulty = Number(b.dataset.difficulty); applyBrowserFilter(); }));
+// Arrow keys walk the grid by its actual column count, so it works for any window width or number of maps.
+$('#map-grid').addEventListener('keydown', e => {
+  const tiles = visibleTiles(), index = tiles.findIndex(t => t.el.contains(document.activeElement));
+  if (index < 0 || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault(); e.stopPropagation();
+  const columns = getComputedStyle($('#map-grid')).gridTemplateColumns.split(' ').length;
+  const next = { ArrowLeft: index - 1, ArrowRight: index + 1, ArrowUp: index - columns, ArrowDown: index + columns, Home: 0, End: tiles.length - 1 }[e.key];
+  const target = tiles[Math.max(0, Math.min(tiles.length - 1, next))]; target.pick.focus(); target.el.scrollIntoView({ block: 'nearest' });
+});function hide(id) { $(id).classList.add('hidden'); } function show(id) { $(id).classList.remove('hidden'); }
 function clearInput() { keys.clear(); touchKeys.clear(); }
 function pressed(key) { return keys.has(key) || [...touchKeys.values()].includes(key); }
 function eventKey(e) { return e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : e.key.toLowerCase(); }
@@ -276,16 +316,17 @@ $('#save-form').addEventListener('submit', async e => {
   if (!storageWorks) $('#result-message').textContent = '이 브라우저가 저장을 차단해 이번 실행 동안만 기록이 유지됩니다.';
 });
 window.addEventListener('keydown', e => {
-  if (e.target instanceof HTMLInputElement) return;
+  if (e.target instanceof HTMLInputElement) { if (eventKey(e) === 'escape' && e.target.id === 'map-search') closeBrowser(); return; }
   const k = eventKey(e);
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k) && ['playing', 'countdown', 'paused'].includes(mode)) e.preventDefault();
-  if (k === 'escape') { if (mode === 'paused') resume(); else if (['playing', 'countdown'].includes(mode)) pause(); else { hide('#help'); hide('#records'); } return; }
+  if (k === 'escape') { if (mode === 'paused') resume(); else if (['playing', 'countdown'].includes(mode)) pause(); else { hide('#help'); hide('#records'); closeBrowser(); } return; }
   if (k === 'r' && !e.repeat && ['playing', 'paused', 'countdown'].includes(mode)) { begin(); return; }
+  if (mode === 'menu' && !$('#map-browser').classList.contains('hidden')) return;
   if (mode === 'menu' && $('#records').classList.contains('hidden') && $('#help').classList.contains('hidden')) {
+    if (k === 'm' && !e.repeat) { openBrowser(); return; }
     if (k === 'enter' && document.activeElement === document.body) { begin(); return; }
-    if (/^[1-9]$/.test(k) && Number(k) <= MAPS.length) { if (Number(k) - 1 !== mapIndex) loadMap(Number(k) - 1); return; }
-    if (['arrowleft', 'arrowup'].includes(k)) { e.preventDefault(); loadMap(mapIndex - 1); return; }
-    if (['arrowright', 'arrowdown'].includes(k)) { e.preventDefault(); loadMap(mapIndex + 1); return; }
+    if (k === 'arrowleft') { e.preventDefault(); loadMap(mapIndex - 1); return; }
+    if (k === 'arrowright') { e.preventDefault(); loadMap(mapIndex + 1); return; }
   }
   keys.add(k);
 });
