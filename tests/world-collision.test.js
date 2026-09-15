@@ -33,6 +33,8 @@ test('flying outward from the course centre, the first crash is the drawn object
     aurora: c => { const a = firstHook(c), lat = Math.abs(a.lateral); return [a.s, a.side, 10, lat + 3, lat + 10]; },
     // Garden: white pillar under the first hook (centre 14 m outside it, about 1.5–1.9 m thick).
     garden: c => { const a = firstHook(c), lat = Math.abs(a.lateral); return [a.s, a.side, a.y - a.ground - 10, lat + 11, lat + 14]; },
+    // Jungle: trunk of the kapok tree carrying the first hook (centre 9 m outside it, 2.2–3.5 m radius).
+    jungle: c => { const a = firstHook(c), lat = Math.abs(a.lateral); return [a.s, a.side, 20, lat + 5, lat + 7.5]; },
   };
   for (const map of MAPS) {
     const c = COURSES[map.id], { collider } = worlds[map.id], [s, side, height, min, max] = probes[map.id](c);
@@ -69,5 +71,19 @@ test('every map can be finished with the real geometry by steering with the hook
       return p.done && p.gate === c.gates.length;
     });
     assert.ok(finished, `${map.id}: no steering setting finished`);
+  }
+});
+
+test('Emerald Ruins arches are solid stone: pass under the lintel and between the pillars, crash into either', () => {
+  const c = COURSES.jungle, { collider } = worlds.jungle, { halfWidth, height } = c.def.archOpening;
+  for (const t of c.def.arches) {
+    const s = t * c.length, hit = (lateral, h) => collider.hits(...point(c, s, lateral, h), BODY_RADIUS);
+    for (const h of [20, 60, height - 2]) assert.equal(hit(0, h), false, `arch at s=${s.toFixed(0)}: opening at ${h} m is clear`);
+    assert.equal(hit(halfWidth - 1, 60), false, `arch at s=${s.toFixed(0)}: inside the pillars is clear`);
+    // Contact is with the stone surface: rising into the lintel's underside, or sliding sideways into a pillar face.
+    assert.equal(hit(0, height - BODY_RADIUS + .2), true, `arch at s=${s.toFixed(0)}: lintel is solid`);
+    for (const side of [-1, 1]) assert.equal(hit(side * (halfWidth + 1 - BODY_RADIUS + .2), 60), true, `arch at s=${s.toFixed(0)}: pillar is solid`);
+    // Checkpoints sit well away from the arches so a respawn never lands under a lintel.
+    assert.ok(c.gates.every(g => Math.abs(g.s + 8 - s) > 40));
   }
 });

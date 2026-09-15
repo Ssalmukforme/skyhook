@@ -49,4 +49,16 @@ export const MAPS = [
     halfWidth: 26, anchor: { spacing: 52, lateral: 30, heights: [78, 86, 74, 82], first: -25 },
     gravity: -30, speedCap: 88, accent: '#8fd3ff',
   },
+  {
+    id: 'jungle', no: '06', theme: 'jungle',
+    name: '에메랄드 정글', en: 'EMERALD RUINS', tagline: '안개 낀 정글 신전, 석조 아치 아래를 지그재그로.',
+    trait: '연속 지그재그 · 석조 아치 통과 · 오르막 뒤 급강하', difficulty: 3, recordKey: 'skyhook.jungle.v1',
+    points: [[0, 80], [0, 0], [0, -150], [85, -270], [95, -410], [5, -530], [-5, -670], [85, -790], [95, -930], [5, -1050], [-5, -1190], [40, -1310], [45, -1440], [45, -1560]],
+    elevation: [[-100, 0], [80, 0], [420, 26], [700, 30], [1000, 6], [1300, -18]],
+    gates: 8, gateOffsets: [0, 0, 0, 0, 0, 0, 0, 0],
+    halfWidth: 22, anchor: { spacing: 46, lateral: 26, heights: [74, 82, 78, 86], first: -25 },
+    // Stone arches span the course between checkpoints: fly under the lintel, between the pillars.
+    arches: [.19, .44, .69, .94], archOpening: { halfWidth: 22, height: 104 },
+    accent: '#6fe08a',
+  },
 ];

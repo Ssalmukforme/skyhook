@@ -25,6 +25,10 @@ export const ENVIRONMENTS = {
     sunColor: '#fff1d8', sun: 3.1, disc: '#fffdf2', discSize: 36, glow: '#fff7dd', glowOpacity: .18, exposure: 1.12, sunDir: [-300, 200, -560], lightOffset: [-120, 160, -100],
     gate: '#ff5fa8', gateSoft: '#ffd36e', gateMarker: '#fff3bf', marker: '#ff5fa8', label: '#ff5fa8', rope: '#fff7c8',
     particles: { count: 260, color: '#ffc6e2', size: .3, opacity: .8, fall: 1.2, drift: [1.5, 0, .8] }, stars: 0, aurora: 0 },
+  jungle: { skyTop: '#3f8374', skyMiddle: '#a3d2b2', skyBottom: '#eef0c8', fog: '#9cc3a2', fogDensity: .003, hemiSky: '#e8ffe0', hemiGround: '#2f4a2a', hemi: 2.3,
+    sunColor: '#fff1c8', sun: 2.9, disc: '#fff8e0', discSize: 30, glow: '#fffbe0', glowOpacity: .2, exposure: 1.1, sunDir: [220, 190, -600], lightOffset: [100, 160, -80],
+    gate: '#ffd76a', gateSoft: '#fff2b0', gateMarker: '#fff6cf', marker: '#8dffb0', label: '#fff2b0', rope: '#f7ffd8',
+    particles: { count: 320, color: '#e8ff9a', size: .22, opacity: .75, fall: -.25, drift: [.4, 0, .3] }, stars: 0, aurora: 0 },
 };
 
 const cube = new THREE.BoxGeometry(1, 1, 1);
@@ -554,7 +558,79 @@ function garden(kit) {
   return {};
 }
 
-const THEMES = { sunset, harbor, canyon, aurora, garden };
+/* ---------------------------------------------------------------- 06 EMERALD RUINS */
+function jungle(kit) {
+  const { box, shape, cylinder, at, random, range, pick, course, root, bounds } = kit, hw = course.halfWidth, end = course.total - course.pre;
+  const stone = ['#7d8a70', '#8a9579', '#6f7c63'], moss = ['#4f7a3f', '#5f8a47', '#3f6a35'], leaves = ['#2f6b35', '#3f8a3f', '#2a5a2e', '#4d9a45'];
+  const blob = new THREE.IcosahedronGeometry(1, 0);
+  // Vines and moss curtains are soft: drawn outside the solid scenery so the runner passes through them.
+  const soft = new THREE.Group(); soft.userData.nonSolid = true; root.add(soft);
+  const vine = (g, x, y, z, length) => { const m = new THREE.Mesh(cube, mat(pick(moss))); m.position.set(x, y - length / 2, z); m.scale.set(.18, length, .18); g.add(m); };
+  const softAt = s => { const f = frameAt(course, s), g = new THREE.Group(); g.position.set(f.x, f.y, f.z); g.rotation.y = f.heading; soft.add(g); return g; };
+
+  // Jungle floor with an overgrown stone road down the middle.
+  kit.ribbon(-90, end, 4, () => [[-(hw + 50), -5, '#1f3b1f'], [-(hw + 16), 0, '#2f5a2c'], [-9, .1, '#4d6a3d'], [-6, .15, '#8a8a6a'], [6, .15, '#8a8a6a'], [9, .1, '#4d6a3d'], [hw + 16, 0, '#2f5a2c'], [hw + 50, -5, '#1f3b1f']]);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(bounds.maxX - bounds.minX + 2400, bounds.maxZ - bounds.minZ + 2400), mat('#1f3b1f'));
+  floor.rotation.x = -Math.PI / 2; floor.position.set(bounds.cx, bounds.minY - 5, bounds.cz); floor.receiveShadow = true; root.add(floor);
+
+  // Stone arches across the course: pillars just outside the opening, lintel above it.
+  const archS = course.def.arches.map(t => t * course.length), open = course.def.archOpening;
+  for (const s of archS) {
+    const g = at(s, 0, 0), top = open.height + 7;
+    for (const side of [-1, 1]) {
+      box(side * (open.halfWidth + 4), top / 2, 0, 6, top, 7, pick(stone), g, true);
+      box(side * (open.halfWidth + 4), 3, 0, 8, 6, 9, '#5f6b54', g, true);
+      for (let y = 18; y < top - 8; y += 22) box(side * (open.halfWidth + 4), y, 0, 6.6, 1.2, 7.6, pick(moss), g);
+    }
+    box(0, open.height + 3.5, 0, 2 * (open.halfWidth + 7), 7, 8, pick(stone), g, true);
+    box(0, top + 1, 0, 2 * (open.halfWidth + 9), 2, 9.5, '#5f6b54', g, true);
+    for (let x = -open.halfWidth; x <= open.halfWidth; x += 11) box(x, open.height + 3.5, 4.1, 3.2, 3.2, .5, '#a3a88a', g);
+    const v = softAt(s);
+    for (let x = -open.halfWidth + 2; x < open.halfWidth; x += range(2.5, 5)) vine(v, x, open.height, range(-3, 3), range(4, 14));
+  }
+  const nearArch = s => archS.some(a => Math.abs(a - s) < 14);
+
+  // Giant kapok trees carry the hook points on their branches.
+  course.anchors.forEach(a => {
+    if (nearArch(a.s)) return;
+    const h = a.y - a.ground, g = at(a.s, 0, 0), side = a.side, lat = Math.abs(a.lateral), x = side * (lat + 9);
+    cylinder(x, (h + 26) / 2 - 1, 0, 2.2, 3.5, h + 26, '#6b5a48', g, 8);
+    for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) box(x + dx * 3.4, 3.5, dz * 3.4, dx ? 3 : 1.1, 7, dz ? 3 : 1.1, '#5b4a3a', g);
+    box(side * (lat + 4.5), h, 0, 9.5, 1.4, 1.4, '#5b4a3a', g, true);
+    for (const dz of [-6, 0, 6]) { const c = shape(blob, pick(leaves), x + side * 6, h + 22 + range(-2, 3), dz, g, true); c.scale.set(range(9, 11), range(6, 8), range(9, 11)); }
+    const v = softAt(a.s);
+    for (let k = 0; k < 4; k++) vine(v, side * (lat + range(3, 8)), h, range(-1, 1), range(8, 20));
+  });
+
+  // Background jungle, broken columns and stepped temples, all kept out of the flight path.
+  for (let s = -40; s < end; s += 14) for (const side of [-1, 1]) {
+    if (random() > .55) continue;
+    const g = at(s + range(-5, 5), side * range(hw + 28, hw + 140), 0), h = range(24, 60);
+    cylinder(0, h / 2, 0, h * .03, h * .05, h, '#5b4a3a', g, 6);
+    for (let k = 0; k < 3; k++) { const c = shape(blob, pick(leaves), range(-4, 4), h + range(-4, 4), range(-4, 4), g, true); c.scale.setScalar(range(6, 11)); }
+  }
+  for (let s = 20; s < end; s += 60) for (const side of [-1, 1]) {
+    if (random() > .6 || nearArch(s)) continue;
+    const g = at(s + range(-8, 8), side * range(hw + 14, hw + 24), 0), h = range(6, 22);
+    cylinder(0, h / 2, 0, 1.6, 1.8, h, pick(stone), g, 8);
+    box(0, h + .5, 0, 4.2, 1, 4.2, '#6f7c63', g);
+  }
+  for (const t of [.12, .36, .58, .82]) {
+    const side = t < .5 ? -1 : 1, g = at(course.length * t, side * (hw + 80), 0), color = pick(stone);
+    for (let k = 0; k < 6; k++) box(0, 4 + k * 8, 0, 44 - k * 6.5, 8, 44 - k * 6.5, k % 2 ? color : '#6f7c63', g, true);
+    box(0, 52, 0, 8, 8, 8, '#5f6b54', g, true);
+    box(-side * 20, 20, 0, 6, 40, 10, '#8a9579', g);
+    const fall = box(-side * 23, 18, 0, 3, 36, 1, mat('#bfeaff', { transparent: true, opacity: .5, emissive: '#a6dcff', emissiveIntensity: .35 }), g); fall.castShadow = false;
+  }
+
+  // Stone launch terrace and goal plaza.
+  launchPad(kit, { body: '#6f7c63', top: '#a7b28f', strip: '#6fe08a', chevron: '#ffd76a' });
+  goalPad(kit, { body: '#6f7c63', top: '#a7b28f', check: '#3f6a35' });
+  birds(kit, 12, '#e2493b', 70, 130);
+  return {};
+}
+
+const THEMES = { sunset, harbor, canyon, aurora, garden, jungle };
 
 export function buildWorld(map, course) {
   const env = ENVIRONMENTS[map.theme];
