@@ -10,7 +10,7 @@
     "test": "node --test tests/*.test.js",
     "dev:crazygames": "vite --host 0.0.0.0 --configLoader native --mode crazygames",
     "build:crazygames": "vite build --configLoader native --mode crazygames",
-    "pack:crazygames": "npm run build:crazygames && tar -a -c -f skyhook-crazygames.zip -C dist-crazygames ."
+    "pack:crazygames": "npm run build:crazygames && node scripts/pack-crazygames.mjs"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.3.0",
