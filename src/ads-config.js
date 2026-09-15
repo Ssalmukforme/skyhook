@@ -1,19 +1,21 @@
 // Adsterra banners, one snippet per size. Paste the whole "Get code" snippet between the backticks;
 // an empty `code` means no ad and no reserved space. These snippets are public (they end up in the page anyway).
 // `mobile` is used on screens up to 600px wide; `media` limits a slot to screens matching that query.
-const BANNER_468 = `<script>
+// Portal builds (npm run build:crazygames) must not ship third-party ad code at all, so the snippets compile away there.
+const OWN_SITE = import.meta.env?.VITE_PLATFORM !== 'crazygames';
+const BANNER_468 = OWN_SITE && `<script>
   atOptions = { 'key' : 'c3115059976e3952e944444283e9ec4b', 'format' : 'iframe', 'height' : 60, 'width' : 468, 'params' : {} };
 </script>
 <script src="https://www.highrevenueformat.com/c3115059976e3952e944444283e9ec4b/invoke.js"></script>`;
-const BANNER_320 = `<script>
+const BANNER_320 = OWN_SITE && `<script>
   atOptions = { 'key' : '361e3a41d2db0f8333a0a795167fae63', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {} };
 </script>
 <script src="https://www.highrevenueformat.com/361e3a41d2db0f8333a0a795167fae63/invoke.js"></script>`;
-const BANNER_300 = `<script>
+const BANNER_300 = OWN_SITE && `<script>
   atOptions = { 'key' : '413a2673314b9f5283878a2effed1f02', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };
 </script>
 <script src="https://www.highrevenueformat.com/413a2673314b9f5283878a2effed1f02/invoke.js"></script>`;
-const BANNER_160 = `<script>
+const BANNER_160 = OWN_SITE && `<script>
   atOptions = { 'key' : '263a566d4e99592040d5fa96a8fccf4c', 'format' : 'iframe', 'height' : 600, 'width' : 160, 'params' : {} };
 </script>
 <script src="https://www.highrevenueformat.com/263a566d4e99592040d5fa96a8fccf4c/invoke.js"></script>`;

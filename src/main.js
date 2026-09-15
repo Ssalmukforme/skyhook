@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { createRunner, animateRunner, cueRunner, resetRunner } from './runner.js';
 import './style.css';
+import 'virtual:skyhook-fonts';
 import { MAPS } from './maps.js';
 import { COURSES, createPlayer, step, formatTime, cleanRecords, frameAt, headingOf } from './physics.js';
 import { buildWorld } from './worlds.js';
 import { fetchBoard, submitRun, describeError } from './leaderboard.js';
 import { t as tr, localizeMaps } from './i18n.js';
+import { PLATFORM, ready, store, gameplayStart, gameplayStop, loadingStart, loadingStop, happytime, midgameAd, rewardedAd, playerName, onMuteSetting } from './platform.js';
 localizeMaps(MAPS);
 import './ads.js';
 
@@ -103,13 +105,13 @@ function loadMap(index) {
   applyEnvironment(); loadRecords(); renderMapCard(); updateWorldInfo(); player = createPlayer(course);
   menuAnchor = course.anchors.find(a => a.side > 0 && a.s > 60) ?? course.anchors[0];
   const [cs, cl, cy, ls, ll, ly] = menuCamera(); worldPoint(cs, cl, cy, camera.position); camera.lookAt(worldPoint(ls, ll, ly)); worldPoint(48, 3, 52, hero.position);
-  try { localStorage.setItem('skyhook.selectedMap', map.id); } catch { }
+  try { store.setItem('skyhook.selectedMap', map.id); } catch { }
 }
 
 let player = createPlayer(course), mode = 'menu', previousMode = 'playing', countdown = 3, accumulator = 0, last = performance.now(), worldTime = 0, toastUntil = 0, menuAnchor = null;
 const keys = new Set(), touchKeys = new Map(); let records = [], storageWorks = true, savedLocal = false, submitted = false, runBest = Infinity;
 function loadRecords() {
-  try { records = cleanRecords(JSON.parse(localStorage.getItem(map.recordKey) || '[]')); storageWorks = true; } catch { records = []; storageWorks = false; }
+  try { records = cleanRecords(JSON.parse(store.getItem(map.recordKey) || '[]')); storageWorks = true; } catch { records = []; storageWorks = false; }
   refreshBest();
 }
 function refreshBest() { const best = records.length ? formatTime(records[0].time) : '--:--.---'; $('#best').textContent = best; $('#best-hud').textContent = 'BEST ' + best + (worldRecord ? tr(' · 1위 ', ' · #1 ') + formatTime(worldRecord) : ''); }
@@ -137,8 +139,20 @@ function drawRoute(svg, c, width, height, detailed) {
 }
 // Korean start label needs 로/으로 after the map name; English just says "Race <map>".
 const withDirection = name => { const code = name.charCodeAt(name.length - 1) - 0xAC00, final = code >= 0 && code < 11172 ? code % 28 : 0; return name + (final === 0 || final === 8 ? '로' : '으로'); };
-function storedBest(m) { try { return cleanRecords(JSON.parse(localStorage.getItem(m.recordKey) || '[]'))[0]?.time; } catch { return undefined; } }
+function storedBest(m) { try { return cleanRecords(JSON.parse(store.getItem(m.recordKey) || '[]'))[0]?.time; } catch { return undefined; } }
 const starText = m => '★'.repeat(m.difficulty) + '☆'.repeat(Math.max(0, 3 - m.difficulty));
+// On CrazyGames the last map is locked. It opens for good when the player watches one rewarded ad, or,
+// without any ad (the portal requires a non-ad way), once every other map has been finished. The own site locks nothing.
+const LOCKED_MAPS = new Set(PLATFORM === 'crazygames' ? ['jungle'] : []);
+function flag(key) { try { return store.getItem(key) === '1'; } catch { return false; } }
+// A map counts as finished once a run reached its goal (or a time for it was saved before this flag existed).
+const isCleared = m => flag(`skyhook.cleared.${m.id}`) || storedBest(m) !== undefined;
+const clearProgress = () => { const others = MAPS.filter(m => !LOCKED_MAPS.has(m.id)); return [others.filter(isCleared).length, others.length]; };
+function isLocked(m) {
+  if (!LOCKED_MAPS.has(m.id) || flag(`skyhook.unlocked.${m.id}`)) return false;
+  const [done, total] = clearProgress();
+  return done < total;
+}
 function renderMapCard() {
   $('#map-count').textContent = `${map.no} / ${pad(MAPS.length)}`; $('#map-total').textContent = pad(MAPS.length); $('#footer-map-count').textContent = pad(MAPS.length);
   $('#map-name').textContent = map.name; $('#map-en').textContent = map.en; $('#map-tagline').textContent = map.tagline; $('#map-trait').textContent = map.trait;
@@ -146,11 +160,15 @@ function renderMapCard() {
   $('#map-gates').replaceChildren(document.createTextNode(course.gates.length), Object.assign(document.createElement('span'), { textContent: ' GATES' }));
   $('#map-difficulty').replaceChildren(document.createTextNode('★'.repeat(map.difficulty)), Object.assign(document.createElement('span'), { textContent: ' ☆'.repeat(Math.max(0, 3 - map.difficulty)) }));
   drawRoute($('#map-svg'), course, 300, 120, true); $('#map-svg').setAttribute('aria-label', tr(`${map.name} 코스 약도`, `${map.name} route map`));
-  $('#start-label').textContent = tr(`${withDirection(map.name)} 출발`, `Race ${map.name}`);
+  $('#start-label').textContent = isLocked(map) ? tr('🔒 광고 보고 열기', '🔒 Unlock with an ad') : tr(`${withDirection(map.name)} 출발`, `Race ${map.name}`);
   $('#hud-district').textContent = 'DISTRICT ' + map.no; $('#hud-name').textContent = map.name;
   $('#result-course').textContent = map.name + tr(' · 완주 기록', ' · Finish time');
   $('#remaining').replaceChildren(document.createTextNode(course.length.toLocaleString() + ' '), Object.assign(document.createElement('small'), { textContent: 'm' }));
   mapTiles.forEach((tile, i) => tile.el.setAttribute('aria-selected', String(i === mapIndex)));
+  refreshLocks();
+}
+function refreshLocks() {
+  for (const t of mapTiles) { const locked = isLocked(t.map); t.el.classList.toggle('locked', locked); t.go.textContent = locked ? tr('🔒 열기', '🔒 Unlock') : tr('출발 ↗', 'Race ↗'); }
 }
 
 // Full map browser: a scrollable, searchable grid so the menu card stays one map tall however many maps exist.
@@ -168,7 +186,7 @@ const mapTiles = MAPS.map((m, i) => {
   tile.append(pick, go); $('#map-grid').append(tile);
   pick.addEventListener('click', () => { closeBrowser(); if (i !== mapIndex) loadMap(i); $('#start').focus(); });
   go.addEventListener('click', () => { closeBrowser(); if (i !== mapIndex) loadMap(i); begin(); });
-  return { el: tile, pick, map: m, mine, top, loaded: false };
+  return { el: tile, pick, go, map: m, mine, top, loaded: false };
 });
 const browserFilter = { text: '', difficulty: 0 };
 function visibleTiles() { return mapTiles.filter(t => !t.el.hidden); }
@@ -214,21 +232,37 @@ function clearInput() { keys.clear(); touchKeys.clear(); document.querySelectorA
 function pressed(key) { return keys.has(key) || [...touchKeys.values()].some(t => t.key === key || t.push === key); }
 function eventKey(e) { return e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : e.key.toLowerCase(); }
 const pad = n => String(n).padStart(2, '0');
+// A new run. On CrazyGames a midgame ad may play at this break (restart, next attempt) but never during a run;
+// the SDK itself limits how often. The very first run starts straight away.
+let runsStarted = 0, adBreak = false;
 function begin() {
+  if (adBreak) return;
+  if (isLocked(map)) { openUnlock(); return; }
+  if (PLATFORM !== 'crazygames' || runsStarted === 0) { startRun(); return; }
+  adBreak = true; pause(); clearInput(); gameplayStop();
+  midgameAd({ onStart: () => audioCtx?.suspend(), onEnd: wakeAudio }).then(() => { adBreak = false; startRun(); });
+}
+function startRun() {
+  runsStarted++;
   clearInput(); player = createPlayer(course); resetRunner(runner); savedLocal = false; submitted = false; runBest = records[0]?.time ?? Infinity; accumulator = 0; mode = 'countdown'; countdown = 3;
   ['#menu', '#pause', '#result', '#records', '#help'].forEach(hide); show('#hud'); show('#countdown'); $('#countdown').textContent = '3'; document.body.classList.add('playing');
   world.gates.forEach(g => g.visible = true); worldPoint(-18, 0, 64, camera.position); camera.lookAt(worldPoint(60, 0, 57)); camForward.set(frameAt(course, 0).tx, 0, frameAt(course, 0).tz);
   $('#save-form button').disabled = false; $('#save-form button').textContent = tr('랭킹 등록', 'Submit'); $('#submit-status').textContent = '';
-  toast(`${map.name}\n${map.trait}`, 3.5); wakeAudio();
+  toast(`${map.name}\n${map.trait}`, 3.5); wakeAudio(); gameplayStart();
 }
-function home() { mode = 'menu'; clearInput(); ['#hud', '#pause', '#result', '#countdown'].forEach(hide); $('#wall-warning').hidden = true; show('#menu'); document.body.classList.remove('playing'); world.gates.forEach(g => g.visible = true); refreshBest(); updateWorldInfo(); }
-function pause() { if (!['playing', 'countdown'].includes(mode)) return; previousMode = mode; mode = 'paused'; clearInput(); hide('#countdown'); show('#pause'); }
-function resume() { mode = previousMode; clearInput(); hide('#pause'); if (mode === 'countdown') show('#countdown'); last = performance.now(); }
+function home() { gameplayStop(); mode = 'menu'; clearInput(); ['#hud', '#pause', '#result', '#countdown'].forEach(hide); $('#wall-warning').hidden = true; show('#menu'); document.body.classList.remove('playing'); world.gates.forEach(g => g.visible = true); refreshBest(); updateWorldInfo(); }
+function pause() { if (!['playing', 'countdown'].includes(mode)) return; gameplayStop(); previousMode = mode; mode = 'paused'; clearInput(); hide('#countdown'); show('#pause'); }
+function resume() { if (adBreak) return; gameplayStart(); mode = previousMode; clearInput(); hide('#pause'); if (mode === 'countdown') show('#countdown'); last = performance.now(); }
 function finish() {
+  gameplayStop(); if (player.time < runBest) happytime();
+  const wasLocked = MAPS.filter(isLocked);
+  try { store.setItem(`skyhook.cleared.${map.id}`, '1'); } catch { }
+  const opened = wasLocked.filter(m => !isLocked(m));
   mode = 'result'; clearInput(); hide('#hud'); show('#result'); $('#final-time').textContent = formatTime(player.time);
   $('#result-eyebrow').textContent = player.time < runBest ? 'NEW PERSONAL BEST' : 'COURSE COMPLETE';
   $('#result-message').textContent = player.falls ? tr(`완주! 복귀 ${player.falls}회 · 추가 시간 ${player.falls * 3}초 포함`, `Finished! ${player.falls} reset${player.falls > 1 ? 's' : ''} · includes +${player.falls * 3}s penalty`) : tr('한 번의 추락도 없이 완주했어요.', 'A clean run with no resets.');
-  try { $('#nickname').value = localStorage.getItem('skyhook.nickname') || $('#nickname').value; } catch { }
+  if (opened.length) { refreshLocks(); $('#result-message').textContent += tr(` · 모든 맵 완주! ${opened.map(m => m.name).join(', ')} 해금`, ` · Every map finished! ${opened.map(m => m.name).join(', ')} unlocked`); }
+  try { $('#nickname').value = store.getItem('skyhook.nickname') || $('#nickname').value; } catch { }
   boards.result.mapId = map.id; renderBoard('result'); chime(3);
 }
 function toast(text, seconds = 2) { $('#toast').textContent = text; toastUntil = worldTime + seconds; $('#toast').style.opacity = 1; }
@@ -240,7 +274,7 @@ function rankRow(rank, name, time, { you = false } = {}) {
   row.append(Object.assign(document.createElement('span'), { textContent: pad(rank) }), label, Object.assign(document.createElement('strong'), { textContent: formatTime(time) }));
   return row;
 }
-function localRecordsFor(m) { if (m === map) return records; try { return cleanRecords(JSON.parse(localStorage.getItem(m.recordKey) || '[]')); } catch { return []; } }
+function localRecordsFor(m) { if (m === map) return records; try { return cleanRecords(JSON.parse(store.getItem(m.recordKey) || '[]')); } catch { return []; } }
 // Two ranking panels (records dialog, result screen) share one renderer: global board or this browser's runs.
 const boards = { records: { mapId: map.id, tab: 'global', token: 0, list: '#ranks', standing: '#records-standing', caption: '#records-course' }, result: { mapId: map.id, tab: 'global', token: 0, list: '#result-ranks', standing: '#result-standing' } };
 async function renderBoard(key, { fresh = false } = {}) {
@@ -298,13 +332,32 @@ document.querySelectorAll('.board-tabs').forEach(tabs => tabs.addEventListener('
 $('#records-toggle').addEventListener('click', () => { boards.records.mapId = map.id; renderBoard('records'); show('#records'); });
 $('#help-open').addEventListener('click', () => show('#help')); $('#help-done').addEventListener('click', () => hide('#help'));
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => hide('#' + b.dataset.close)));
+// Unlock dialog: watching is optional (the skip button looks the same), and nothing unlocks if the ad fails.
+let unlocking = false;
+function openUnlock() {
+  $('#unlock-name').textContent = map.name;
+  const [done, total] = clearProgress();
+  $('#unlock-text').textContent = tr(`짧은 광고 하나를 보면 이 맵이 계속 열려 있어요. 광고 없이도 다른 맵 ${total}개를 모두 완주하면 열립니다. (완주 ${done} / ${total})`, `Watch one short ad to unlock this map for good. Or unlock it without ads by finishing all ${total} other maps. (${done} / ${total} finished)`);
+  $('#unlock-status').textContent = ''; $('#unlock-watch').disabled = false; $('#unlock-other').disabled = false;
+  closeBrowser(); show('#unlock'); $('#unlock-watch').focus();
+}
+function closeUnlock() { if (!unlocking) hide('#unlock'); }
+$('#unlock-other').addEventListener('click', () => { closeUnlock(); openBrowser(); });
+$('#unlock-watch').addEventListener('click', async () => {
+  if (unlocking) return; unlocking = true; $('#unlock-watch').disabled = true; $('#unlock-other').disabled = true; $('#unlock-status').textContent = tr('광고를 불러오는 중…', 'Loading the ad…');
+  const rewarded = await rewardedAd({ onStart: () => audioCtx?.suspend(), onEnd: wakeAudio });
+  unlocking = false; $('#unlock-other').disabled = false;
+  if (!rewarded) { $('#unlock-watch').disabled = false; $('#unlock-status').textContent = tr('광고를 불러오지 못해 열리지 않았어요. 잠시 후 다시 시도해 주세요.', 'The ad could not be shown, so the map stays locked. Please try again later.'); return; }
+  try { store.setItem(`skyhook.unlocked.${map.id}`, '1'); } catch { }
+  hide('#unlock'); renderMapCard(); happytime(); startRun();
+});
 $('#save-form').addEventListener('submit', async e => {
   e.preventDefault(); if (submitted || !player.done) return;
   const button = $('#save-form button'), status = $('#submit-status'), name = $('#nickname').value.trim() || 'PLAYER', run = { mapId: map.id, name, time: player.time, falls: player.falls };
-  try { localStorage.setItem('skyhook.nickname', name); } catch { }
+  try { store.setItem('skyhook.nickname', name); } catch { }
   if (!savedLocal) {
     records = cleanRecords([...records, { name, time: player.time, falls: player.falls }]);
-    try { localStorage.setItem(map.recordKey, JSON.stringify(records)); storageWorks = true; } catch { storageWorks = false; }
+    try { store.setItem(map.recordKey, JSON.stringify(records)); storageWorks = true; } catch { storageWorks = false; }
     savedLocal = true; refreshBest();
   }
   button.disabled = true; button.textContent = tr('등록 중…', 'Submitting…'); status.className = 'submit-status'; status.textContent = tr('전체 랭킹에 등록하는 중…', 'Submitting to the world leaderboard…');
@@ -326,9 +379,9 @@ window.addEventListener('keydown', e => {
   if (e.target instanceof HTMLInputElement) { if (eventKey(e) === 'escape' && e.target.id === 'map-search') closeBrowser(); return; }
   const k = eventKey(e);
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k) && ['playing', 'countdown', 'paused'].includes(mode)) e.preventDefault();
-  if (k === 'escape') { if (mode === 'paused') resume(); else if (['playing', 'countdown'].includes(mode)) pause(); else { hide('#help'); hide('#records'); closeBrowser(); } return; }
+  if (k === 'escape') { if (mode === 'paused') resume(); else if (['playing', 'countdown'].includes(mode)) pause(); else { hide('#help'); hide('#records'); closeUnlock(); closeBrowser(); } return; }
   if (k === 'r' && !e.repeat && ['playing', 'paused', 'countdown'].includes(mode)) { begin(); return; }
-  if (mode === 'menu' && !$('#map-browser').classList.contains('hidden')) return;
+  if (mode === 'menu' && (!$('#map-browser').classList.contains('hidden') || !$('#unlock').classList.contains('hidden'))) return;
   if (mode === 'menu' && $('#records').classList.contains('hidden') && $('#help').classList.contains('hidden')) {
     if (k === 'm' && !e.repeat) { openBrowser(); return; }
     if (k === 'enter' && document.activeElement === document.body) { begin(); return; }
@@ -491,7 +544,13 @@ function frame(now) {
 }
 window.addEventListener('resize', () => { const [w, h] = viewSize(); camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7)); });
 canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); pause(); $('#loading').textContent = tr('3D 화면 연결이 끊겼습니다. 페이지를 새로고침해 주세요.', 'Lost the 3D display. Please reload the page.'); show('#loading'); });
+// Wait for the portal SDK (instant on the own site) so saved records and settings come from the right storage.
+await ready; loadingStart();
 let initial = 0;
-try { initial = Math.max(0, MAPS.findIndex(m => m.id === localStorage.getItem('skyhook.selectedMap'))); } catch { }
+try { initial = Math.max(0, MAPS.findIndex(m => m.id === store.getItem('skyhook.selectedMap'))); } catch { }
 loadMap(initial);
-hide('#loading'); requestAnimationFrame(frame);
+hide('#loading'); requestAnimationFrame(frame); loadingStop();
+onMuteSetting(muted => { if (muted && soundOn) $('#sound').click(); $('#sound').disabled = muted; });
+playerName().then(name => { try { if (name && !store.getItem('skyhook.nickname')) $('#nickname').value = name.slice(0, 16); } catch { } });
+// CrazyGames players land directly in a run on the map they last had selected; the menu is one pause away.
+if (PLATFORM === 'crazygames') { if (isLocked(map)) loadMap(0); startRun(); }

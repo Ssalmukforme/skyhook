@@ -3,3 +3,5 @@ dist/
 .vite/
 .env
 *.local
+dist-crazygames/
+skyhook-crazygames.zip

@@ -88,3 +88,22 @@ values ('redline', 'city', '시티', true, 0, 7200000);
 - `supabase/migrations/`: 공용 랭킹 코어(테이블·RLS·RPC)와 SKYHOOK 보드 등록.
 
 Three.js 0.184.0 / Vite 7.3.6. 외부 모델이나 텍스처 없이 게임 내 3D 지오메트리로 제작. 케이블 운동은 고정 120 Hz 타임스텝, 중력, 진자 제약, 점진적 릴 수축과 해제 시 접선 속도 보존을 사용.
+
+## CrazyGames 빌드
+
+같은 코드에서 포털용 빌드를 따로 만든다. 자체 사이트 빌드(`npm run build` → `dist/`)는 그대로다.
+
+```sh
+npm run pack:crazygames      # dist-crazygames/ 빌드 + 업로드용 skyhook-crazygames.zip
+npm run dev:crazygames       # 로컬에서 SDK 테스트 모드(데모 광고·배너)로 확인
+```
+
+- 영어 페이지 하나(`en/index.html` 기반)에 CrazyGames SDK v3 스크립트를 넣고, 검색·공유용 태그·아이콘·언어 전환 링크는 뺀다. 경로는 모두 상대 경로.
+- Adsterra 코드는 빌드에서 아예 제외된다(`src/ads-config.js`의 `OWN_SITE`). 배너는 SDK 배너로 시작 화면·결과 화면에만 뜨고 플레이 중에는 없다.
+- 새 판을 시작할 때(재시작, 한 번 더) SDK midgame 광고를 요청한다. 광고 중에는 소리를 끄고 입력을 막으며, 빈도는 SDK가 3분 간격으로 제한한다. 첫 판은 광고 없이 바로 시작한다.
+- 07 몬순 정글은 잠겨 있다. 보상형 광고 하나를 끝까지 보거나(광고 실패 시 열리지 않음), 광고 없이 나머지 맵 6개를 모두 완주하면(`skyhook.cleared.<id>`) 계정에 영구히 열린다(`skyhook.unlocked.jungle`). 해금 창에 완주 진행도가 나오고, "광고 보고 열기"와 "다른 맵 고르기" 버튼은 같은 모양이다. 자체 사이트 빌드에는 잠금이 없다.
+- 게임을 열면 곧바로 첫 판이 시작된다(Full Launch 요구사항 "Land directly in gameplay"). 메뉴는 일시정지에서 갈 수 있다.
+- `gameplayStart/Stop`, `loadingStart/Stop`, 개인 최고 기록 시 `happytime`을 보낸다. 포털의 음소거 설정이 게임 소리 버튼보다 우선한다.
+- 기록·선택한 맵·닉네임은 SDK data 모듈에 저장되어 CrazyGames 계정을 따라간다. 로그인한 플레이어는 CrazyGames 이름이 랭킹 이름 기본값이 된다.
+- 폰트(Noto Sans KR·Barlow Condensed의 라틴 글자)는 빌드에 포함되어 Google Fonts를 부르지 않는다.
+- 전체 랭킹(Supabase)은 그대로 요청한다. 포털 정책상 막히거나 거절되면 SDK 랭킹으로 바꾸거나 뺀다.

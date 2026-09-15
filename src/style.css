@@ -133,3 +133,7 @@ body.touch #hud:has(.ad-play.filled) .hud-bottom{bottom:calc(228px + env(safe-ar
 @media(max-width:600px){.lang-link{min-height:36px;padding:8px 12px}}
 @media(orientation:landscape) and (max-height:540px){.lang-link{min-height:34px;padding:7px 12px}}
 :lang(en) .map-tile[aria-selected="true"]::after{content:'SELECTED'}
+/* CrazyGames locked map: dimmed tile, and an unlock dialog whose watch and skip buttons look exactly alike (portal rule). */
+.map-tile.locked .tile-route,.map-tile.locked .tile-title{opacity:.55}.map-tile.locked .tile-go{letter-spacing:0}
+.unlock-dialog{max-width:420px}.unlock-dialog p{line-height:1.6}.unlock-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.unlock-actions button{width:100%;min-height:48px}
+@media(max-width:600px){.unlock-actions{grid-template-columns:1fr}}
