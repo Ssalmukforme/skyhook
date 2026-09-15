@@ -13,7 +13,9 @@ let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); }
 catch (error) { $('#loading').textContent = '3D 화면을 열 수 없습니다. 브라우저의 하드웨어 가속을 켜고 다시 열어 주세요.'; throw error; }
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
-renderer.setSize(innerWidth, innerHeight);
+// The canvas is sized by CSS (full screen, or between the side ads); the renderer follows its box.
+const viewSize = () => [canvas.clientWidth || innerWidth, canvas.clientHeight || innerHeight];
+renderer.setSize(...viewSize(), false);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.25;
@@ -21,7 +23,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2('#c89490', .0021);
-const camera = new THREE.PerspectiveCamera(59, innerWidth / innerHeight, .2, 1750);
+const camera = new THREE.PerspectiveCamera(59, viewSize()[0] / viewSize()[1], .2, 1750);
 const hemiLight = new THREE.HemisphereLight('#ffcca4', '#6a668f', 2.9); scene.add(hemiLight);
 const sunLight = new THREE.DirectionalLight('#ffb474', 3.2);
 sunLight.castShadow = true;
@@ -484,7 +486,7 @@ function frame(now) {
   if (worldTime > toastUntil) $('#toast').style.opacity = 0;
   renderer.render(scene, camera);
 }
-window.addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7)); });
+window.addEventListener('resize', () => { const [w, h] = viewSize(); camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7)); });
 canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); pause(); $('#loading').textContent = '3D 화면 연결이 끊겼습니다. 페이지를 새로고침해 주세요.'; show('#loading'); });
 let initial = 0;
 try { initial = Math.max(0, MAPS.findIndex(m => m.id === localStorage.getItem('skyhook.selectedMap'))); } catch { }

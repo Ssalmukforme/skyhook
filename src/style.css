@@ -45,8 +45,8 @@
 
 #wall-warning{position:absolute;top:50%;left:6vw;transform:translateY(-50%);font-family:'Barlow Condensed',sans-serif;font-size:22px;letter-spacing:2px;color:#ffd08a;text-shadow:0 2px 14px #1a1624;padding:8px 14px;border-left:3px solid #ffd08a;background:#1a162455}#wall-warning.right{left:auto;right:6vw;border-left:0;border-right:3px solid #ffd08a}#wall-warning.danger{color:#ff6b5a;border-color:#ff6b5a;animation:wallPulse .35s ease-in-out infinite alternate}@keyframes wallPulse{to{opacity:.55}}@media(prefers-reduced-motion:reduce){#wall-warning.danger{animation:none}}
 
-/* Ads: empty slots take no space; filled slots are sized by ads.js (--ad-w / --ad-h) */
-.ad-slot{width:0;height:0;overflow:hidden;line-height:0}.ad-slot.filled{width:var(--ad-w);height:var(--ad-h);max-width:100%}
+/* Ads: empty slots take no space (1px, cancelled by margin, so they still register as on screen); filled slots are sized by ads.js (--ad-w / --ad-h) */
+.ad-slot{width:1px;height:1px;margin-bottom:-1px;overflow:hidden;line-height:0}.ad-slot.filled{width:var(--ad-w);height:var(--ad-h);max-width:100%;margin-bottom:0}
 .ad-slot iframe{display:block;border:0}.ad-placeholder{display:grid;place-items:center;width:100%;height:100%;border:1px dashed #fff3df66;background:#1a16248c;color:#fff3df99;font:11px/1 'Barlow Condensed',sans-serif;letter-spacing:1px;box-sizing:border-box}
 .topbar{position:relative}.ad-menu{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2}#menu:has(.ad-menu.filled) .edition{visibility:hidden}
 .ad-pause.filled,.ad-result.filled{margin:16px auto 0}
@@ -120,3 +120,11 @@ body.touch #wall-warning{font-size:17px;top:42%}
   #records-toggle{min-height:52px;padding:0 16px;border:1px solid #fff3df40;border-radius:3px;background:#1a162466;font-size:13px;white-space:nowrap}
   .menu-footer{order:4;position:static;margin-top:4px;border:0;padding:6px 0 0;justify-content:center}.menu-footer>span:first-child{display:none}.menu-footer .text-button{font-size:12px}
 }
+/* Wide screens: a 160x600 banner in each side margin; the game view (canvas, menu, HUD) sits between them. */
+.ad-side{position:fixed;top:50%;margin:0;transform:translateY(-50%);z-index:30}.ad-side.left{left:15px}.ad-side.right{right:15px}
+body.side-ads{--gutter:190px;background:#1a1624}
+body.side-ads #world,body.side-ads .vignette,body.side-ads #menu,body.side-ads #hud,body.side-ads #countdown,body.side-ads #loading{left:var(--gutter);right:var(--gutter);width:calc(100% - 2 * var(--gutter))}
+/* Phones during a run: a 320x50 banner at the very bottom, the touch pads sitting right on top of it. */
+.ad-play{position:absolute;left:50%;bottom:env(safe-area-inset-bottom);margin:0;transform:translateX(-50%);pointer-events:auto}
+body.touch #hud:has(.ad-play.filled) #touch-controls{bottom:calc(50px + env(safe-area-inset-bottom));padding-bottom:0}
+body.touch #hud:has(.ad-play.filled) .hud-bottom{bottom:calc(228px + env(safe-area-inset-bottom))}

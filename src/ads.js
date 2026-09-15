@@ -2,7 +2,8 @@ import { AD_SLOTS } from './ads-config.js';
 
 // Each banner runs in its own iframe, so Adsterra's global `atOptions` of one slot never clobbers another
 // and the ad script cannot touch the game page. A slot loads when its screen becomes visible
-// (hidden screens never intersect), and reloads at most once a minute when the screen is shown again.
+// (hidden screens never intersect), and reloads at most once a minute when the screen is shown again,
+// so a banner never reloads in the middle of a run.
 // `?ads-preview` in the URL draws dashed boxes for slots that have no code yet, to check the layout.
 const preview = new URLSearchParams(location.search).has('ads-preview');
 const RELOAD_MS = 60_000;
@@ -11,8 +12,9 @@ const loaded = new WeakMap();
 
 function unitFor(name) {
   const slot = AD_SLOTS[name];
-  if (!slot) return null;
+  if (!slot || (slot.media && !matchMedia(slot.media).matches)) return null;
   const unit = narrow.matches && slot.mobile ? slot.mobile : slot;
+  if (!unit.width) return null;
   // A desktop banner never squeezes onto a phone: without a mobile unit the slot stays empty there.
   if (narrow.matches && !slot.mobile && unit.width > innerWidth - 32) return null;
   return unit.code.trim() || preview ? unit : null;
@@ -39,6 +41,15 @@ function fill(slot) {
   loaded.set(slot, { size, at: performance.now() });
 }
 
+// Side skyscrapers get their own margins: body.side-ads narrows the game view (canvas, menu, HUD) to sit
+// between them, and a resize event lets the renderer pick up the new canvas size.
+function updateSideMargins() {
+  const on = !!unitFor('side');
+  if (document.body.classList.contains('side-ads') === on) return;
+  document.body.classList.toggle('side-ads', on);
+  window.dispatchEvent(new Event('resize'));
+}
+
 // Clicking a banner moves keyboard focus into its iframe, which would swallow A/D/Enter/Esc.
 // Hand focus back to the game when the pointer leaves the ad or the player returns from the ad's tab.
 function releaseFocus() {
@@ -50,4 +61,9 @@ const slots = [...document.querySelectorAll('.ad-slot[data-ad]')];
 const observer = new IntersectionObserver(entries => entries.forEach(e => e.isIntersecting && fill(e.target)));
 slots.forEach(slot => { observer.observe(slot); slot.addEventListener('pointerleave', releaseFocus); });
 document.addEventListener('visibilitychange', releaseFocus);
-narrow.addEventListener('change', () => slots.forEach(slot => { loaded.delete(slot); if (slot.offsetParent) fill(slot); }));
+updateSideMargins();
+let resizeTimer = 0;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { updateSideMargins(); slots.forEach(slot => { if (slot.checkVisibility()) fill(slot); }); }, 200);
+});
