@@ -12,51 +12,46 @@
 
 캐릭터는 청록색 재킷, 얼굴이 드러나는 주황색 헬멧, 카고 바지와 크림색 부츠를 착용한 오리지널 도시 러너. 등에는 소형 화물 가방을 메고 허리의 기계식 릴에서 스윙 케이블이 연결된다.
 
-## 실행 (로컬 개발)
+## 실행
 
 ```sh
 npm install
-npm run server:local          # 랭킹 API (PostgreSQL 설치 없이 PGlite로 실행, 데이터는 ./.pglite)
-npm run dev -- --port 5174    # 게임 (다른 터미널). /api 요청은 8787 포트로 프록시
+cp .env.example .env          # ssalmuk_ranking URL과 publishable 키 (이미 만들어 둔 .env가 있으면 생략)
+npm run dev -- --port 5174
 ```
 
-랭킹 서버 없이 `npm run dev`만 실행해도 게임과 개인 기록은 그대로 동작하고, 전체 랭킹 자리에는 "랭킹 서버 연결 안 됨"이 표시된다.
+`.env`가 없어도 게임과 개인 기록은 그대로 동작하고, 전체 랭킹 자리에는 "랭킹 미설정"이 표시된다. `npm run build`로 만든 `dist`는 정적 파일이라 어떤 웹 서버·호스팅에 올려도 된다(빌드할 때 `.env` 값이 들어간다).
 
-`npm test`로 모든 맵 완주 가능 여부, 곡선 트랙 투영·벽 충돌, 추락 복귀, 체크포인트 순서, 타이머, 기록 데이터, 랭킹 API(실제 PostgreSQL SQL을 PGlite로 실행) 검증.
+`npm test`로 모든 맵 완주 가능 여부, 곡선 트랙 투영·벽 충돌, 추락 복귀, 체크포인트 순서, 타이머, 기록 데이터, Supabase 랭킹 SQL(실제 마이그레이션을 PGlite로 실행) 검증.
 
-## 개인 서버 배포 (PostgreSQL)
+## 전체 랭킹 (Supabase `ssalmuk_ranking`)
 
-Node 22 이상 필요. 서버 하나가 게임(`dist`)과 랭킹 API(`/api`)를 함께 서빙한다.
+여러 게임이 함께 쓰는 공용 랭킹 프로젝트 `ssalmuk_ranking`에 저장한다. 이 게임은 `skyhook`, 맵 5개는 각각 보드(`sunset`, `harbor`, `canyon`, `aurora`, `garden`)로 등록되어 있고, 마이그레이션 두 개가 이미 적용되어 있다.
 
-1. DB와 계정 준비 (테이블은 서버 시작 시 `server/schema.sql`로 자동 생성):
-   ```sql
-   CREATE USER skyhook WITH PASSWORD '비밀번호';
-   CREATE DATABASE skyhook OWNER skyhook;
-   ```
-2. 프로젝트를 서버에 올리고:
-   ```sh
-   npm ci
-   npm run build
-   cp .env.example .env   # DATABASE_URL 등 수정
-   npm start              # 기본 http://0.0.0.0:8787
-   ```
-3. 계속 실행되게 하려면 systemd·pm2 등으로 `npm start`를 등록. nginx/Caddy 뒤에 둘 때는 `.env`에 `TRUST_PROXY=true`를 넣어야 IP별 요청 제한이 실제 접속자 기준으로 동작한다.
+- `supabase/migrations/20260915000000_ranking_core.sql`: 공용 코어. 모든 게임이 공유.
+- `supabase/migrations/20260915000100_skyhook_boards.sql`: SKYHOOK 게임·맵 등록.
 
-| 환경 변수 | 설명 |
-|---|---|
-| `DATABASE_URL` | 필수. `postgres://user:pass@host:5432/db` |
-| `PGSSL` | DB가 TLS를 요구하면 `require` |
-| `PORT` / `HOST` | 기본 `8787` / `0.0.0.0` |
-| `TRUST_PROXY` | 리버스 프록시 뒤면 `true` |
-| `CORS_ORIGIN` | 프론트엔드를 API와 다른 도메인에 올릴 때만. 이때 프론트 빌드는 `VITE_API_BASE=https://api.example.com npm run build` |
-| `STATIC_DIR` | 게임 파일 위치(기본 `./dist`). `off`면 API만 |
+`.env`에는 프로젝트 URL과 publishable 키만 넣는다(브라우저에 노출돼도 되는 값). `service_role`/secret 키는 절대 넣지 않는다.
 
-### API
+공용 코어 구성:
+- `games`(게임), `boards`(게임별 맵·코스·모드. `higher_is_better`로 낮은 값/높은 값 우선, `min_value`~`max_value` 허용 범위, 선택적 페널티 규칙), `players`(익명 ID·최근 닉네임), `scores`(모든 제출 기록, 게임별 추가 정보는 `meta` JSON), `submit_log`(IP 해시 기반 요청 제한용, 10분 뒤 삭제).
+- 모든 테이블은 RLS가 켜져 있고 정책이 없어 브라우저에서 직접 읽기·쓰기가 불가능하다. Supabase 보안 점검에 "RLS 정책 없음", "anon이 SECURITY DEFINER 함수 실행 가능" 안내가 뜨는데, 공개 RPC 두 개로만 접근하게 한 의도된 설계다.
+- `get_leaderboard(p_game_id, p_board_id, p_limit, p_player_id)`: 보드별 플레이어 최고 기록 순위(동률이면 먼저 달성한 사람이 위)와 내 순위.
+- `submit_score(p_game_id, p_board_id, p_player_id, p_name, p_value, p_meta)`: 검증 후 저장하고 개인 최고 갱신 여부와 현재 순위를 돌려준다. 플레이어당 분당 6회, IP당 분당 20회(전체 게임 합산)로 제한.
 
-- `GET /api/maps/:mapId/leaderboard?limit=20`: 맵별 플레이어 최고 기록 순위(동률이면 먼저 달성한 사람이 위). `X-Player-Id` 헤더를 보내면 `you`에 내 순위 포함.
-- `POST /api/runs`: `{ mapId, playerId, name, time, falls }` 등록. 응답에 이번 기록이 개인 최고인지와 현재 순위.
-- `GET /api/health`: DB 연결 확인.
+SKYHOOK 값은 완주 시간(밀리초, 낮을수록 좋음)이고 `meta.falls`(복귀 횟수)가 필수다. 추락 1회당 최소 시간이 3초씩 늘어난다. 맵을 추가하거나 트랙 길이·최고 속도를 바꾸면 `skyhook_boards` 마이그레이션의 `min_value`도 바꿔 다시 적용해야 한다. 값이 `src/maps.js`와 어긋나면 `npm test`가 실패한다.
 
+### 다른 게임을 같은 랭킹에 추가하기
+
+코어는 다시 만들 필요 없이 게임과 보드만 등록한다. 예: 생존 시간이 길수록 좋은 게임.
+
+```sql
+insert into public.games (id, name) values ('redline', 'REDLINE');
+insert into public.boards (game_id, id, name, higher_is_better, min_value, max_value)
+values ('redline', 'city', '시티', true, 0, 7200000);
+```
+
+게임 코드에서는 같은 URL·publishable 키로 `supabase.rpc('submit_score', { p_game_id: 'redline', p_board_id: 'city', ... })`와 `get_leaderboard`를 호출하면 된다. 보드 id는 게임마다 따로라 다른 게임과 이름이 겹쳐도 된다.
 ## 조작
 
 - A: 왼쪽 연결점에 훅, D: 오른쪽 연결점에 훅. A+D 동시 입력은 양쪽 훅. 누른 키를 떼면 해당 케이블만 해제.
@@ -70,16 +65,16 @@ Node 22 이상 필요. 서버 하나가 게임(`dist`)과 랭킹 API(`/api`)를 
 
 - **전체 랭킹(맵별):** 완주 후 이름을 입력하고 "랭킹 등록"을 누르면 서버에 저장된다. 한 사람당 그 맵의 최고 기록 하나로 순위를 매기고, 이름을 바꾸면 가장 최근 이름으로 표시된다. 결과 화면에 "전체 N위 / M명", 시작 화면 맵 카드에 전체 1위 기록·내 순위, HUD에 1위 기록이 보인다. "랭킹 보기"에서 맵을 바꿔가며 전체 랭킹 / 내 기록 탭을 볼 수 있다.
 - **플레이어 식별:** 로그인 없이 브라우저마다 익명 ID(localStorage)를 만든다. 브라우저 데이터를 지우거나 다른 기기에서 하면 새 플레이어로 집계된다.
-- **내 기록:** 기존처럼 같은 브라우저에 맵별 빠른 기록 10개를 저장하며, 서버가 꺼져 있어도 저장된다(선셋 애비뉴는 기존 키를 그대로 사용해 이전 기록 유지).
-- **부정 기록 방지(기본 수준):** 서버가 없는 맵, 코스를 최고 속도로 달려도 불가능한 시간(추락 1회당 +3초 반영), 1시간 초과 기록을 거부하고 IP당 분당 12회·플레이어당 분당 6회로 등록을 제한한다. 기록 시간은 브라우저가 보고하므로 개발자 도구로 조작한 "그럴듯한" 시간까지 막지는 못한다. 확실히 막으려면 입력 기록을 서버에서 물리 엔진으로 재생해 검증하는 방식이 필요하다.
+- **내 기록:** 기존처럼 같은 브라우저에 맵별 빠른 기록 10개를 저장하며, 랭킹에 연결할 수 없어도 저장된다(선셋 애비뉴는 기존 키를 그대로 사용해 이전 기록 유지).
+- **부정 기록 방지(기본 수준):** DB 함수가 등록되지 않은 맵, 코스를 최고 속도로 달려도 불가능한 시간(추락 1회당 +3초 반영), 1시간 초과 기록, 복귀 횟수가 빠진 기록을 거부하고 플레이어당 분당 6회·IP당 분당 20회로 등록을 제한한다. 기록 시간은 브라우저가 보고하므로 개발자 도구로 조작한 "그럴듯한" 시간까지 막지는 못한다. 확실히 막으려면 입력 기록을 서버(Supabase Edge Function 등)에서 물리 엔진으로 재생해 검증하는 방식이 필요하다.
 
 ## 구조
 
-- `src/maps.js`: 맵 정의(중심선 제어점, 고저차, 게이트, 연결점 배치, 중력·최고 속도·바람). Three.js 없이 테스트와 서버에서 import.
+- `src/maps.js`: 맵 정의(중심선 제어점, 고저차, 게이트, 연결점 배치, 중력·최고 속도·바람). Three.js 없이 테스트에서 import.
 - `src/physics.js`: 제어점을 Catmull-Rom 곡선으로 만들고 2 m 간격으로 재샘플링한 트랙 좌표계. 진자 제약·벽·게이트·복귀를 모두 "트랙 진행 거리 / 좌우 오프셋 / 지면 높이" 기준으로 계산.
 - `src/worlds.js`: 테마별 3D 월드 생성(하늘·안개·조명·파티클 팔레트 포함). 정적 지오메트리는 재질·구역별로 병합해 드로우콜 절감.
 - `src/main.js`: 맵 전환, 카메라, HUD, 입력, 랭킹 화면.
-- `src/leaderboard.js`: 랭킹 API 클라이언트(익명 플레이어 ID, 캐시, 오프라인 처리).
-- `server/`: `index.js`(PostgreSQL 운영 서버), `dev.js`(PGlite 로컬 서버), `app.js`(라우팅·검증·요청 제한·정적 파일), `store.js`(SQL), `schema.sql`.
+- `src/leaderboard.js`: Supabase RPC 클라이언트(익명 플레이어 ID, 캐시, 오프라인·미설정 처리). supabase-js는 처음 필요할 때 따로 불러온다.
+- `supabase/migrations/`: 공용 랭킹 코어(테이블·RLS·RPC)와 SKYHOOK 보드 등록.
 
 Three.js 0.184.0 / Vite 7.3.6. 외부 모델이나 텍스처 없이 게임 내 3D 지오메트리로 제작. 케이블 운동은 고정 120 Hz 타임스텝, 중력, 진자 제약, 점진적 릴 수축과 해제 시 접선 속도 보존을 사용.

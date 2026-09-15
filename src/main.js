@@ -235,7 +235,7 @@ async function updateWorldInfo({ fresh = false } = {}) {
     $('#world-label').textContent = top ? `전체 1위 · ${top.name}` : '전체 1위';
     if (data.you) $('#best-label').textContent = `MY BEST · ${data.you.rank}위/${data.total}명`;
     refreshBest();
-  } catch { if (token === worldToken) { $('#world-best').textContent = '랭킹 서버 연결 안 됨'; $('#world-best').classList.add('muted'); } }
+  } catch (error) { if (token === worldToken) { $('#world-best').textContent = error.code === 'not_configured' ? '랭킹 미설정' : '랭킹 서버 연결 안 됨'; $('#world-best').classList.add('muted'); } }
 }
 $('#start').addEventListener('click', begin); $('#again').addEventListener('click', begin); $('#restart-pause').addEventListener('click', begin); $('#resume').addEventListener('click', resume); $('#pause-button').addEventListener('click', pause);
 document.querySelectorAll('.home-button').forEach(b => b.addEventListener('click', home));
@@ -270,7 +270,7 @@ $('#save-form').addEventListener('submit', async e => {
   } catch (error) {
     button.disabled = false; button.textContent = '다시 등록'; status.classList.add('error');
     status.textContent = `${describeError(error)} 기록은 이 브라우저에 저장했어요.`;
-    if (error.code === 'implausible_time') { button.disabled = true; button.textContent = '등록 불가'; }
+    if (error.code === 'implausible_score') { button.disabled = true; button.textContent = '등록 불가'; }
     if (boards.result.tab === 'local') renderBoard('result');
   }
   if (!storageWorks) $('#result-message').textContent = '이 브라우저가 저장을 차단해 이번 실행 동안만 기록이 유지됩니다.';

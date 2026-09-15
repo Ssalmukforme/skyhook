@@ -1,8 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  optimizeDeps: { noDiscovery: true, include: [] },
-  // `npm run dev` forwards ranking calls to `npm start` or `npm run server:local`.
-  server: { proxy: { '/api': process.env.SKYHOOK_API ?? 'http://127.0.0.1:8787' } },
+  // supabase-js is imported lazily, so list it for dev pre-bundling.
+  optimizeDeps: { noDiscovery: true, include: ['@supabase/supabase-js'] },
   build: { rollupOptions: { output: { manualChunks: { three: ['three'] } } } },
 });
