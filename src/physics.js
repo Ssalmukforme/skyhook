@@ -137,15 +137,16 @@ export function headingOf(p) {
   return { hx: f.tx, hz: f.tz };
 }
 export function connect(p, side) {
-  const c = p.course, dir = side === 'left' ? -1 : 1, { hx, hz } = headingOf(p);
+  // A always hooks the course's left row of hook points and D the right row, whichever way the runner is facing,
+  // so a runner flying sideways or backwards can still hook the side that pulls them back.
+  // Among that row it takes the point about 60 m further along the course that is within cable reach.
+  const c = p.course, dir = side === 'left' ? -1 : 1;
   let best = null, score = Infinity;
   for (const a of c.anchors) {
-    // "Ahead" and "left/right" are measured from where the runner is actually flying, not from the course line.
-    const dx = a.x - p.x, dz = a.z - p.z, forward = dx * hx + dz * hz, across = dx * -hz + dz * hx;
-    if (Math.sign(across) !== dir) continue;
-    const dist = Math.hypot(p.x - a.x, p.y - a.y, p.z - a.z);
-    if (forward < 24 || forward > 110 || dist > 145) continue;
-    const cost = Math.abs(forward - 65) + Math.abs(across) * .08;
+    if (a.side !== dir) continue;
+    const along = a.s - p.s, dist = Math.hypot(p.x - a.x, p.y - a.y, p.z - a.z);
+    if (along < 5 || dist > 145) continue;
+    const cost = Math.abs(along - 60);
     if (cost < score) { best = a; score = cost; }
   }
   if (best) {

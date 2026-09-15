@@ -54,11 +54,18 @@ test('hitting a real object crashes back to the last checkpoint; open air beside
   const q=createPlayer(c);Object.assign(q,{vx:12,vz:-12,vy:0});const dir=Math.atan2(q.vx,q.vz);step(q,{forward:true},1/120);
   assert.ok(Math.abs(Math.atan2(q.vx,q.vz)-dir)<1e-9);
 });
-test('hooks aim from the runner\'s own direction, not from the course line',()=>{
-  // Flying backwards down Marigold Avenue (+z): "ahead" is +z and the right hand points at the -x buildings.
-  const p=createPlayer();Object.assign(p,{gate:3,z:-500,vx:0,vz:30,vy:0,trackIndex:Math.round((500+80)/2)});
-  step(p,{rightHook:true},1/120);
-  assert.ok(p.hooks.right,'a hook connects');assert.ok(p.hooks.right.anchor.z>p.z,'anchor is ahead of the runner');assert.ok(p.hooks.right.anchor.x<0,'right hand of a +z runner is the -x side');
+test('A always hooks the left row and D the right row, whichever way the runner faces',()=>{
+  // Marigold Avenue runs toward -z, so its right row is +x and its left row is -x.
+  for(const [vx,vz,label] of [[0,-30,'forwards'],[0,30,'backwards'],[-30,0,'sideways at the left row'],[30,0,'sideways at the right row']]){
+    for(const [key,side,sign] of [['leftHook','left',-1],['rightHook','right',1]]){
+      const p=createPlayer();Object.assign(p,{gate:3,x:0,z:-500,y:55,vx,vz,vy:0,trackIndex:Math.round((500+80)/2)});
+      step(p,{[key]:true},1/120);
+      const hook=p.hooks[side];
+      assert.ok(hook,`${key} connects when flying ${label}`);
+      assert.equal(Math.sign(hook.anchor.x),sign,`${key} hooks its own row when flying ${label}`);
+      assert.ok(hook.anchor.s>p.s,`${key} hooks a point further along the course when flying ${label}`);
+    }
+  }
 });
 test('dual hooks and timed releases complete all seven gates with big vertical swings',()=>{
   const p=createPlayer();let airborne=0,releases=0,minY=p.y,maxY=p.y;
