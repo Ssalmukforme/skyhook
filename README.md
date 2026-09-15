@@ -16,11 +16,10 @@
 
 ```sh
 npm install
-cp .env.example .env          # ssalmuk_ranking URL과 publishable 키 (이미 만들어 둔 .env가 있으면 생략)
 npm run dev -- --port 5174
 ```
 
-`.env`가 없어도 게임과 개인 기록은 그대로 동작하고, 전체 랭킹 자리에는 "랭킹 미설정"이 표시된다. `npm run build`로 만든 `dist`는 정적 파일이라 어떤 웹 서버·호스팅에 올려도 된다(빌드할 때 `.env` 값이 들어간다).
+랭킹 연결 정보(`ssalmuk_ranking` URL과 publishable 키)는 `src/ranking-config.js`에 들어 있어 별도 설정 없이 바로 연결된다. `npm run build`로 만든 `dist`는 정적 파일이라 Cloudflare Pages 등 어떤 호스팅에 올려도 된다(빌드 명령 `npm run build`, 출력 폴더 `dist`). 다른 Supabase 프로젝트를 쓰려면 빌드 환경 변수 `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`로 덮어쓴다. 랭킹에 연결할 수 없어도 게임과 개인 기록은 그대로 동작한다.
 
 `npm test`로 모든 맵 완주 가능 여부, 곡선 트랙 투영·벽 충돌, 추락 복귀, 체크포인트 순서, 타이머, 기록 데이터, Supabase 랭킹 SQL(실제 마이그레이션을 PGlite로 실행) 검증.
 
@@ -31,7 +30,7 @@ npm run dev -- --port 5174
 - `supabase/migrations/20260915000000_ranking_core.sql`: 공용 코어. 모든 게임이 공유.
 - `supabase/migrations/20260915000100_skyhook_boards.sql`: SKYHOOK 게임·맵 등록.
 
-`.env`에는 프로젝트 URL과 publishable 키만 넣는다(브라우저에 노출돼도 되는 값). `service_role`/secret 키는 절대 넣지 않는다.
+URL과 publishable 키는 브라우저에 공개되도록 만든 값이라 저장소(`src/ranking-config.js`)에 둔다. 접근은 RLS와 RPC 두 개로만 제한된다. `service_role`/secret 키는 절대 코드나 환경 변수에 넣지 않는다.
 
 공용 코어 구성:
 - `games`(게임), `boards`(게임별 맵·코스·모드. `higher_is_better`로 낮은 값/높은 값 우선, `min_value`~`max_value` 허용 범위, 선택적 페널티 규칙), `players`(익명 ID·최근 닉네임), `scores`(모든 제출 기록, 게임별 추가 정보는 `meta` JSON), `submit_log`(IP 해시 기반 요청 제한용, 10분 뒤 삭제).
@@ -74,6 +73,7 @@ values ('redline', 'city', '시티', true, 0, 7200000);
 - `src/physics.js`: 제어점을 Catmull-Rom 곡선으로 만들고 2 m 간격으로 재샘플링한 트랙 좌표계. 진자 제약·벽·게이트·복귀를 모두 "트랙 진행 거리 / 좌우 오프셋 / 지면 높이" 기준으로 계산.
 - `src/worlds.js`: 테마별 3D 월드 생성(하늘·안개·조명·파티클 팔레트 포함). 정적 지오메트리는 재질·구역별로 병합해 드로우콜 절감.
 - `src/main.js`: 맵 전환, 카메라, HUD, 입력, 랭킹 화면.
+- `src/ranking-config.js`: 공용 랭킹 프로젝트 URL·publishable 키.
 - `src/leaderboard.js`: Supabase RPC 클라이언트(익명 플레이어 ID, 캐시, 오프라인·미설정 처리). supabase-js는 처음 필요할 때 따로 불러온다.
 - `supabase/migrations/`: 공용 랭킹 코어(테이블·RLS·RPC)와 SKYHOOK 보드 등록.
 

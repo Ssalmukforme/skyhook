@@ -1,7 +1,9 @@
 // Global leaderboard in the shared ssalmuk_ranking Supabase project (supabase/migrations): this game is
 // skyhook and each map is a board. Every call fails soft: local records keep working without Supabase.
-const URL_ = import.meta.env?.VITE_SUPABASE_URL;
-const KEY = import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env?.VITE_SUPABASE_ANON_KEY;
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './ranking-config.js';
+
+const URL_ = import.meta.env.VITE_SUPABASE_URL || SUPABASE_URL;
+const KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY;
 const GAME_ID = 'skyhook';
 const CACHE_MS = 20_000;
 const cache = new Map();
