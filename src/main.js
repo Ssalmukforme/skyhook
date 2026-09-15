@@ -5,6 +5,7 @@ import { MAPS } from './maps.js';
 import { COURSES, createPlayer, step, formatTime, cleanRecords, frameAt, headingOf } from './physics.js';
 import { buildWorld } from './worlds.js';
 import { fetchBoard, submitRun, describeError } from './leaderboard.js';
+import './ads.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#world');
@@ -203,8 +204,9 @@ $('#map-grid').addEventListener('keydown', e => {
   const next = { ArrowLeft: index - 1, ArrowRight: index + 1, ArrowUp: index - columns, ArrowDown: index + columns, Home: 0, End: tiles.length - 1 }[e.key];
   const target = tiles[Math.max(0, Math.min(tiles.length - 1, next))]; target.pick.focus(); target.el.scrollIntoView({ block: 'nearest' });
 });function hide(id) { $(id).classList.add('hidden'); } function show(id) { $(id).classList.remove('hidden'); }
-function clearInput() { keys.clear(); touchKeys.clear(); }
-function pressed(key) { return keys.has(key) || [...touchKeys.values()].includes(key); }
+function clearInput() { keys.clear(); touchKeys.clear(); document.querySelectorAll('.touch-hook').forEach(b => b.dataset.push = ''); }
+// A held touch pad presses its key, plus W or S while the thumb is slid up or down from where it landed.
+function pressed(key) { return keys.has(key) || [...touchKeys.values()].some(t => t.key === key || t.push === key); }
 function eventKey(e) { return e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : e.key.toLowerCase(); }
 const pad = n => String(n).padStart(2, '0');
 function begin() {
@@ -332,7 +334,20 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => keys.delete(eventKey(e)));
 window.addEventListener('blur', () => { clearInput(); pause(); }); document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
-for (const b of document.querySelectorAll('[data-key]')) { b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); touchKeys.set(e.pointerId, b.dataset.key); }); const end = e => touchKeys.delete(e.pointerId); b.addEventListener('pointerup', end); b.addEventListener('pointercancel', end); b.addEventListener('lostpointercapture', end); }
+// Touch layout shows on touch screens; typing a game key switches back to the keyboard hints.
+const coarsePointer = matchMedia('(pointer: coarse)');
+const isTouch = () => document.body.classList.contains('touch');
+document.body.classList.toggle('touch', coarsePointer.matches);
+window.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') document.body.classList.add('touch'); }, { capture: true });
+window.addEventListener('keydown', e => { if (!e.repeat && ['a', 'd', 'w', 's'].includes(eventKey(e)) && !(e.target instanceof HTMLInputElement)) document.body.classList.remove('touch'); }, { capture: true });
+const PUSH_SLIDE = 28;
+for (const b of document.querySelectorAll('[data-key]')) {
+  const isPad = b.classList.contains('touch-hook');
+  b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); touchKeys.set(e.pointerId, { key: b.dataset.key, y: e.clientY, push: null }); });
+  if (isPad) b.addEventListener('pointermove', e => { const t = touchKeys.get(e.pointerId); if (!t) return; const dy = e.clientY - t.y; t.push = dy < -PUSH_SLIDE ? 'w' : dy > PUSH_SLIDE ? 's' : null; b.dataset.push = t.push ?? ''; });
+  const end = e => { touchKeys.delete(e.pointerId); if (isPad) b.dataset.push = ''; };
+  b.addEventListener('pointerup', end); b.addEventListener('pointercancel', end); b.addEventListener('lostpointercapture', end); b.addEventListener('contextmenu', e => e.preventDefault());
+}
 let audioCtx = null, soundOn = false;
 function wakeAudio() { if (soundOn) { audioCtx ??= new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume().catch(() => { }); } }
 function chime(level = 1) { if (!soundOn || !audioCtx) return; for (let i = 0; i < level; i++) { const osc = audioCtx.createOscillator(), gain = audioCtx.createGain(); osc.type = 'sine'; osc.frequency.value = 440 * Math.pow(1.25, i); gain.gain.setValueAtTime(0, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(.08, audioCtx.currentTime + .015 + i * .1); gain.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + .35 + i * .1); osc.connect(gain).connect(audioCtx.destination); osc.start(audioCtx.currentTime + i * .1); osc.stop(audioCtx.currentTime + .4 + i * .1); } }
@@ -371,7 +386,10 @@ function updateCamera(dt) {
     // Chase camera sits behind the runner's own travel direction; it never swings to follow the course.
     const { hx, hz } = headingOf(player), speed = Math.hypot(player.vx, player.vy, player.vz);
     tmp.set(hx, 0, hz); camForward.lerp(tmp, 1 - Math.exp(-4 * dt)).normalize();
-    const back = 17 + Math.min(8, speed * .11);
+    // A phone held upright sees a very narrow slice sideways at the desktop FOV, hiding the hook points:
+    // widen the view (and pull back a little) until about 50° of the sides are visible.
+    const portrait = camera.aspect < 1, sideFov = portrait ? Math.min(92, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(25)) / camera.aspect))) : 60;
+    const back = (17 + Math.min(8, speed * .11)) * (portrait ? 1.15 : 1);
     camTarget.set(player.x - camForward.x * back, player.y + 7, player.z - camForward.z * back);
     const horizontal = 1 - Math.exp(-7 * dt);
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, camTarget.x, horizontal);
@@ -381,7 +399,7 @@ function updateCamera(dt) {
     const vl = player.vx * -camForward.z + player.vz * camForward.x;
     lookTarget.set(player.x + camForward.x * 35, player.y + 1 + (reducedMotion ? 0 : player.vy * .24), player.z + camForward.z * 35); camera.lookAt(lookTarget);
     if (!reducedMotion) camera.rotateZ(THREE.MathUtils.clamp(-vl * .003, -.055, .055));
-    camera.fov = THREE.MathUtils.lerp(camera.fov, reducedMotion ? 65 : 60 + Math.min(24, speed * .36), 1 - Math.exp(-3 * dt));
+    camera.fov = THREE.MathUtils.lerp(camera.fov, Math.max(sideFov, 60) + (reducedMotion ? 5 : Math.min(24, speed * .36) * (portrait ? .4 : 1)), 1 - Math.exp(-3 * dt));
   }
   streaks.material.opacity = mode === 'playing' && !reducedMotion ? Math.max(0, Math.min(.24, (Math.hypot(player.vx, player.vy, player.vz) - 28) / 180)) : 0;
   camera.updateProjectionMatrix(); sky.position.copy(camera.position); stars.position.copy(camera.position);
@@ -417,6 +435,7 @@ function updateHookIndicators() {
     indicator.title = hooked ? '연결됨 · 키를 떼면 해제' : waiting ? '앞쪽 연결점 찾는 중' : '키를 눌러 연결';
     const button = document.querySelector('[data-key="' + key + '"]'); button.classList.toggle('connected', hooked); button.setAttribute('aria-pressed', String(pressed(key)));
   }
+  for (const key of ['w', 's']) document.querySelector('[data-key="' + key + '"]').setAttribute('aria-pressed', String(pressed(key)));
 }
 function updateHud(dt) {
   hudClock += dt; if (hudClock < .04) return; hudClock = 0;
@@ -429,7 +448,7 @@ function updateHud(dt) {
   const near = world.collider.nearest(player.x, player.y, player.z, 6.6), warn = $('#wall-warning');
   warn.hidden = !near; if (near) { const { hx, hz } = headingOf(player), right = (near.x - player.x) * -hz + (near.z - player.z) * hx > 0; warn.textContent = right ? '충돌 주의 ▶' : '◀ 충돌 주의'; warn.classList.toggle('right', right); warn.classList.toggle('danger', near.distance < 3.1); }
   $('#progress-fill').style.width = Math.max(0, Math.min(100, player.s / course.length * 100)) + '%';
-  $('#web-status').textContent = player.releaseReady ? '지금 놓기!  ↗' : player.anchor ? (player.vy < 0 ? '하강 · 속도를 모으는 중' : player.forwardSpeed < 0 ? '다시 누르면 앞쪽 연결점에 연결' : '상승 중 · 조금 더 기다리기') : '공중 비행 · A / D로 연결';
+  $('#web-status').textContent = player.releaseReady ? '지금 놓기!  ↗' : player.anchor ? (player.vy < 0 ? '하강 · 속도를 모으는 중' : player.forwardSpeed < 0 ? '다시 누르면 앞쪽 연결점에 연결' : '상승 중 · 조금 더 기다리기') : isTouch() ? '공중 비행 · 훅 패드를 눌러 연결' : '공중 비행 · A / D로 연결';
   $('#web-status').style.color = player.releaseReady ? '#9affd0' : ''; $('#web-meter-fill').style.background = player.releaseReady ? '#9affd0' : ''; $('#web-meter-fill').style.width = (player.tension * 100) + '%';
 }
 function frame(now) {
@@ -440,14 +459,14 @@ function frame(now) {
   if (mode !== 'paused') worldTime += dt;
   if (mode === 'countdown') {
     countdown -= dt; $('#countdown').textContent = Math.max(1, Math.ceil(countdown));
-    if (countdown <= 0) { mode = 'playing'; hide('#countdown'); toast('GO! A / D로 훅을 걸어.', 2); chime(); }
+    if (countdown <= 0) { mode = 'playing'; hide('#countdown'); toast(isTouch() ? 'GO! 양쪽 패드로 훅을 걸어.' : 'GO! A / D로 훅을 걸어.', 2); chime(); }
   }
   if (mode === 'playing') {
     accumulator += dt;
     const input = { leftHook: pressed('a') || pressed('arrowleft'), rightHook: pressed('d') || pressed('arrowright'), forward: pressed('w') || pressed('arrowup'), back: pressed('s') || pressed('arrowdown') };
     while (accumulator >= 1 / 120 && mode === 'playing') {
       const event = step(player, input, 1 / 120, world.collider); accumulator -= 1 / 120;
-      if (player.attached) { cueRunner(runner, 'catch'); hookFlash = 1; const a = (player.hooks.right || player.hooks.left).anchor; hookPulse.position.set(a.x, a.y, a.z); }
+      if (player.attached) { if (isTouch()) navigator.vibrate?.(12); cueRunner(runner, 'catch'); hookFlash = 1; const a = (player.hooks.right || player.hooks.left).anchor; hookPulse.position.set(a.x, a.y, a.z); }
       if (player.released && !player.anchor) cueRunner(runner, 'release');
       if (event === 'gate') { world.gates[player.gate - 1].visible = false; toast(`CHECKPOINT ${pad(player.gate)}  /  ${pad(course.gates.length)}`, 1.7); chime(); }
       if (event === 'recover') { resetRunner(runner); hero.position.set(player.x, player.y, player.z); const f = frameAt(course, player.s); camForward.set(f.tx, 0, f.tz); camera.position.set(player.x - f.tx * 23, player.y + 7, player.z - f.tz * 23); toast(`${({ obstacle: '부딪혔어요', missed: '게이트를 놓쳤어요' })[player.recoverReason] ?? '추락'} · 마지막 체크포인트로 복귀 · +3초`, 2.5); }
