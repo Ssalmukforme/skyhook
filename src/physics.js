@@ -1,6 +1,9 @@
-﻿import { MAPS } from './maps.js';
+import { MAPS } from './maps.js';
 
 const STEP = 2;
+// Sideways velocity decay per second. Walls are lethal, so taut cables must not fling the runner sideways:
+// two hooks settle toward the middle quickly, one hook still swings you toward its side.
+const LATERAL_DAMPING = { free: 1.2, single: 2, dual: 3.5 };
 const smooth = t => t * t * (3 - 2 * t);
 
 // Centripetal Catmull-Rom keeps tight control points from overshooting into loops.
@@ -148,10 +151,10 @@ function summarizeHooks(p) {
   } else p.anchor = hooks.length === 1 ? hooks[0].anchor : null;
   return hooks;
 }
-export function recover(p) {
+export function recover(p, reason = 'fall') {
   const c = p.course, gate = p.gate ? c.gates[p.gate - 1] : null;
   place(p, c, gate ? gate.s + 8 : 0, gate ? gate.lateral : 0, 57);
-  p.time += 3; p.falls++;
+  p.time += 3; p.falls++; p.recoverReason = reason;
 }
 export function step(p, input, dt) {
   if (p.done) return null;
@@ -180,7 +183,7 @@ export function step(p, input, dt) {
   // Damp sideways drift strongly and forward motion lightly, measured in the local track frame.
   let vf = p.vx * loc.tx + p.vz * loc.tz, vl = p.vx * loc.rx + p.vz * loc.rz;
   vf = (vf + push * dt) * Math.exp(-.025 * dt);
-  vl = (vl + gust * dt) * Math.exp(-.55 * dt);
+  vl = (vl + gust * dt) * Math.exp(-(hooks.length === 2 ? LATERAL_DAMPING.dual : hooks.length ? LATERAL_DAMPING.single : LATERAL_DAMPING.free) * dt);
   p.vx = loc.tx * vf + loc.rx * vl; p.vz = loc.tz * vf + loc.rz * vl;
   p.vy += c.gravity * dt;
   const speed = Math.hypot(p.vx, p.vy, p.vz);
@@ -201,13 +204,8 @@ export function step(p, input, dt) {
   }
   p.tension = Math.max(0, ...hooks.map(h => h.tension));
   loc = locate(c, p.x, p.z, loc.i);
-  // Corridor walls follow the curve; collide and slide instead of tunneling.
-  if (Math.abs(loc.lateral) > c.halfWidth) {
-    const push = Math.sign(loc.lateral) * c.halfWidth - loc.lateral, lv = p.vx * loc.rx + p.vz * loc.rz;
-    p.x += loc.rx * push; p.z += loc.rz * push;
-    p.vx -= loc.rx * lv * 1.25; p.vz -= loc.rz * lv * 1.25;
-    loc = locate(c, p.x, p.z, loc.i);
-  }
+  // Corridor walls follow the curve. Touching one is a crash: no sliding assist, straight back to the last checkpoint.
+  if (Math.abs(loc.lateral) > c.halfWidth) { recover(p, 'wall'); return 'recover'; }
   p.s = loc.s; p.lateral = loc.lateral; p.ground = loc.ground; p.trackIndex = loc.i;
   p.forwardSpeed = p.vx * loc.tx + p.vz * loc.tz;
   p.releaseReady = !!p.anchor && p.s > p.anchor.s + 12 && p.y > p.ground + 30 && p.vy > 10 && p.forwardSpeed > 8;
@@ -225,7 +223,8 @@ export function step(p, input, dt) {
       }
     }
   }
-  if (p.y < p.ground + 4 || p.y > p.ground + 160 || (gate && p.s > gate.s + 48) || p.s < -60) { recover(p); return 'recover'; }
+  if (gate && p.s > gate.s + 48) { recover(p, 'missed'); return 'recover'; }
+  if (p.y < p.ground + 4 || p.y > p.ground + 160 || p.s < -60) { recover(p, 'fall'); return 'recover'; }
   return null;
 }
 export function formatTime(seconds) { const ms = Math.max(0, Math.floor(seconds * 1000)); return `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`; }

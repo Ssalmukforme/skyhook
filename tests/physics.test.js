@@ -2,17 +2,27 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlayer, step, GATES, formatTime, cleanRecords, COURSES, frameAt, locate } from '../src/physics.js';
 import { MAPS } from '../src/maps.js';
-test('every map is a finishable course and new maps are not straight lines',()=>{
+// A steering driver like the in-game tip: look ahead along the current velocity and, when heading for a wall,
+// hold only the hook on the far side so that cable pulls back toward the middle.
+function steeringRun(c,horizon,threshold){
+  const p=createPlayer(c);let airborne=0,walls=0;
+  for(let i=0;i<120*120&&!p.done;i++){
+    if(p.releaseReady&&airborne<=0)airborne=.5;
+    const held=airborne<=0;airborne-=1/120;
+    const ahead=locate(c,p.x+p.vx*horizon,p.z+p.vz*horizon,p.trackIndex).lateral,limit=c.halfWidth*threshold;
+    const left=held&&ahead>-limit,right=held&&ahead<limit;
+    if(step(p,{leftHook:left,rightHook:right,forward:true},1/120)==='recover'&&p.recoverReason==='wall')walls++;
+  }
+  return {p,walls};
+}
+test('every map can be finished cleanly without touching a wall, and new maps are not straight lines',()=>{
   const recordKeys=new Set();
   for(const map of MAPS){
     const c=COURSES[map.id];recordKeys.add(map.recordKey);
-    const p=createPlayer(c);let airborne=0;
-    for(let i=0;i<120*120&&!p.done;i++){
-      if(p.releaseReady&&airborne<=0)airborne=.5;
-      const held=airborne<=0;airborne-=1/120;
-      step(p,{leftHook:held,rightHook:held,forward:true},1/120);
-    }
-    assert.equal(p.done,true,map.id);assert.equal(p.gate,c.gates.length,map.id);assert.equal(p.falls,0,map.id);
+    const runs=[[1,.4],[1.2,.4],[1.4,.35],[1,.35]].map(([h,t])=>steeringRun(c,h,t));
+    const clean=runs.find(r=>r.p.done&&r.p.falls===0&&r.walls===0);
+    assert.ok(clean,`${map.id}: no steering line finished without a crash (${runs.map(r=>`done=${r.p.done} walls=${r.walls} falls=${r.p.falls}`).join('; ')})`);
+    assert.equal(clean.p.gate,c.gates.length,map.id);
     let turn=0;for(let s=0;s<c.length;s+=20){const a=frameAt(c,s),b=frameAt(c,s+20);turn+=Math.abs(Math.atan2(Math.sin(a.heading-b.heading),Math.cos(a.heading-b.heading)));}
     if(map.id!=='sunset')assert.ok(turn>Math.PI/2,`${map.id} should bend (total turn ${turn.toFixed(2)} rad)`);
   }
@@ -22,11 +32,27 @@ test('track projection round-trips along a curved course',()=>{
   const c=COURSES.aurora;
   for(const s of [0,300,640,1000]){const f=frameAt(c,s),loc=locate(c,f.x+f.rx*10,f.z+f.rz*10,Math.round((s+c.pre)/2));assert.ok(Math.abs(loc.s-s)<.5);assert.ok(Math.abs(loc.lateral-10)<.5);}
 });
-test('curved walls keep the runner inside the corridor',()=>{
-  const c=COURSES.canyon,p=createPlayer(c);
-  for(let i=0;i<120*6;i++){step(p,{rightHook:true,forward:true},1/120);assert.ok(Math.abs(p.lateral)<=c.halfWidth+.01);}
+test('touching a wall is a crash: no sliding, back to the last checkpoint with the same penalty as a missed gate',()=>{
+  for(const map of MAPS){
+    const c=COURSES[map.id],p=createPlayer(c),gate=c.gates[1],f=frameAt(c,gate.s+30);
+    Object.assign(p,{gate:2,time:10,x:f.x+f.rx*(c.halfWidth+.5),z:f.z+f.rz*(c.halfWidth+.5),y:f.y+50,vx:f.tx*40,vy:0,vz:f.tz*40,trackIndex:Math.round((gate.s+30+c.pre)/2)});
+    assert.equal(step(p,{},1/120),'recover',map.id);
+    assert.equal(p.recoverReason,'wall');assert.equal(p.gate,2);assert.equal(p.falls,1);assert.ok(p.time>=13);
+    assert.ok(Math.abs(p.s-(gate.s+8))<.5&&Math.abs(p.lateral-gate.lateral)<.5,`${map.id} respawns just past checkpoint 02`);
+  }
+  // A missed gate recovers the same way, only the reason differs.
+  const p=createPlayer();Object.assign(p,{gate:0,z:-210,y:50});assert.equal(step(p,{},1/120),'recover');assert.equal(p.recoverReason,'missed');
 });
-test('dual hooks and timed releases complete all seven gates without a fall',()=>{
+test('holding both hooks on a straight never flings the runner into a wall',()=>{
+  const c=COURSES.sunset,p=createPlayer(c);let airborne=0,maxLateral=0;
+  for(let i=0;i<120*40&&!p.done;i++){
+    if(p.releaseReady&&airborne<=0)airborne=.5;
+    const held=airborne<=0;airborne-=1/120;
+    assert.notEqual(step(p,{leftHook:held,rightHook:held,forward:true},1/120),'recover');
+    maxLateral=Math.max(maxLateral,Math.abs(p.lateral));
+  }
+  assert.equal(p.done,true);assert.ok(maxLateral<c.halfWidth-4,`max lateral ${maxLateral.toFixed(1)}`);
+});test('dual hooks and timed releases complete all seven gates without a fall',()=>{
   const p=createPlayer();let airborne=0,releases=0,minY=p.y,maxY=p.y;
   for(let i=0;i<120*90&&!p.done;i++){
     if(p.releaseReady&&airborne<=0){airborne=.5;releases++;}
