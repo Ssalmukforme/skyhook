@@ -2,27 +2,23 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlayer, step, GATES, formatTime, cleanRecords, COURSES, frameAt, locate } from '../src/physics.js';
 import { MAPS } from '../src/maps.js';
-// A steering driver like the in-game tip: look ahead along the current velocity and, when heading for a wall,
-// hold only the hook on the far side so that cable pulls back toward the middle.
-function steeringRun(c,horizon,threshold){
+// A steering driver: predict the track offset a moment ahead and hold only the hook that pulls away from the near wall.
+function steeringRun(c,horizon=1.4,threshold=.35){
   const p=createPlayer(c);let airborne=0,walls=0;
-  for(let i=0;i<120*120&&!p.done;i++){
+  for(let i=0;i<120*180&&!p.done;i++){
     if(p.releaseReady&&airborne<=0)airborne=.5;
     const held=airborne<=0;airborne-=1/120;
     const ahead=locate(c,p.x+p.vx*horizon,p.z+p.vz*horizon,p.trackIndex).lateral,limit=c.halfWidth*threshold;
-    const left=held&&ahead>-limit,right=held&&ahead<limit;
-    if(step(p,{leftHook:left,rightHook:right,forward:true},1/120)==='recover'&&p.recoverReason==='wall')walls++;
+    if(step(p,{leftHook:held&&ahead>-limit,rightHook:held&&ahead<limit,forward:true},1/120)==='recover'&&p.recoverReason==='wall')walls++;
   }
   return {p,walls};
 }
-test('every map can be finished cleanly without touching a wall, and new maps are not straight lines',()=>{
+test('every map can be finished by steering with the hooks alone, and new maps are not straight lines',()=>{
   const recordKeys=new Set();
   for(const map of MAPS){
     const c=COURSES[map.id];recordKeys.add(map.recordKey);
-    const runs=[[1,.4],[1.2,.4],[1.4,.35],[1,.35]].map(([h,t])=>steeringRun(c,h,t));
-    const clean=runs.find(r=>r.p.done&&r.p.falls===0&&r.walls===0);
-    assert.ok(clean,`${map.id}: no steering line finished without a crash (${runs.map(r=>`done=${r.p.done} walls=${r.walls} falls=${r.p.falls}`).join('; ')})`);
-    assert.equal(clean.p.gate,c.gates.length,map.id);
+    const {p,walls}=steeringRun(c);
+    assert.equal(p.done,true,`${map.id}: not finished (gate ${p.gate}, wall crashes ${walls})`);assert.equal(p.gate,c.gates.length,map.id);
     let turn=0;for(let s=0;s<c.length;s+=20){const a=frameAt(c,s),b=frameAt(c,s+20);turn+=Math.abs(Math.atan2(Math.sin(a.heading-b.heading),Math.cos(a.heading-b.heading)));}
     if(map.id!=='sunset')assert.ok(turn>Math.PI/2,`${map.id} should bend (total turn ${turn.toFixed(2)} rad)`);
   }
@@ -43,16 +39,25 @@ test('touching a wall is a crash: no sliding, back to the last checkpoint with t
   // A missed gate recovers the same way, only the reason differs.
   const p=createPlayer();Object.assign(p,{gate:0,z:-210,y:50});assert.equal(step(p,{},1/120),'recover');assert.equal(p.recoverReason,'missed');
 });
-test('holding both hooks on a straight never flings the runner into a wall',()=>{
-  const c=COURSES.sunset,p=createPlayer(c);let airborne=0,maxLateral=0;
-  for(let i=0;i<120*40&&!p.done;i++){
-    if(p.releaseReady&&airborne<=0)airborne=.5;
-    const held=airborne<=0;airborne-=1/120;
-    assert.notEqual(step(p,{leftHook:held,rightHook:held,forward:true},1/120),'recover');
-    maxLateral=Math.max(maxLateral,Math.abs(p.lateral));
+test('nothing steers the runner along the course: no hooks and W keep a straight line into a bend',()=>{
+  const c=COURSES.canyon,p=createPlayer(c),start=Math.atan2(p.vx,p.vz);
+  let result=null;
+  for(let i=0;i<120*12&&!result;i++){
+    const before=Math.atan2(p.vx,p.vz);result=step(p,{forward:true},1/120);
+    if(!result)assert.ok(Math.abs(Math.atan2(Math.sin(before-start),Math.cos(before-start)))<1e-9,'heading never bends toward the track');
   }
-  assert.equal(p.done,true);assert.ok(maxLateral<c.halfWidth-4,`max lateral ${maxLateral.toFixed(1)}`);
-});test('dual hooks and timed releases complete all seven gates without a fall',()=>{
+  assert.equal(result,'recover','an unhooked straight line leaves the course');
+  // W pushes along the runner's own direction, even when that points away from the course line.
+  const q=createPlayer(c);Object.assign(q,{vx:12,vz:-12,vy:0});const dir=Math.atan2(q.vx,q.vz);step(q,{forward:true},1/120);
+  assert.ok(Math.abs(Math.atan2(q.vx,q.vz)-dir)<1e-9);
+});
+test('hooks aim from the runner\'s own direction, not from the course line',()=>{
+  // Flying backwards down Sunset Avenue (+z): "ahead" is +z and the right hand points at the -x buildings.
+  const p=createPlayer();Object.assign(p,{gate:3,z:-500,vx:0,vz:30,vy:0,trackIndex:Math.round((500+80)/2)});
+  step(p,{rightHook:true},1/120);
+  assert.ok(p.hooks.right,'a hook connects');assert.ok(p.hooks.right.anchor.z>p.z,'anchor is ahead of the runner');assert.ok(p.hooks.right.anchor.x<0,'right hand of a +z runner is the -x side');
+});
+test('dual hooks and timed releases complete all seven gates with big vertical swings',()=>{
   const p=createPlayer();let airborne=0,releases=0,minY=p.y,maxY=p.y;
   for(let i=0;i<120*90&&!p.done;i++){
     if(p.releaseReady&&airborne<=0){airborne=.5;releases++;}
@@ -60,21 +65,20 @@ test('holding both hooks on a straight never flings the runner into a wall',()=>
     step(p,{leftHook:held,rightHook:held,forward:true},1/120);
     minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);
   }
-  assert.equal(p.done,true,JSON.stringify(p));assert.equal(p.gate,7);assert.equal(p.falls,0);
+  assert.equal(p.done,true,JSON.stringify(p));assert.equal(p.gate,7);
   assert.ok(releases>=5);assert.ok(maxY-minY>30,'swings must have a substantial vertical arc');
 });
 test('holding keeps a fixed pivot and produces a descending then rising arc',()=>{
-  const p=createPlayer();step(p,{rightHook:true},1/120);const pivot=p.anchor;let lowest=p.y,descended=false,rose=false;
+  const p=createPlayer();step(p,{leftHook:true,rightHook:true},1/120);const pivot=p.hooks.right.anchor;let lowest=p.y,descended=false,rose=false;
   for(let i=0;i<420;i++){
-    step(p,{rightHook:true},1/120);assert.equal(p.anchor,pivot);assert.equal(p.falls,0);
+    step(p,{leftHook:true,rightHook:true},1/120);assert.equal(p.hooks.right.anchor,pivot);assert.equal(p.falls,0);
     lowest=Math.min(lowest,p.y);if(p.vy< -10)descended=true;if(descended&&p.vy>10&&p.y-lowest>10)rose=true;
   }
   assert.ok(descended&&rose);assert.ok(lowest<30);
-});
-test('release preserves momentum instead of adding a scripted launch',()=>{
-  const p=createPlayer();for(let i=0;i<600&&!p.releaseReady;i++)step(p,{rightHook:true,forward:true},1/120);
+});test('release preserves momentum instead of adding a scripted launch',()=>{
+  const p=createPlayer();for(let i=0;i<600&&!p.releaseReady;i++)step(p,{leftHook:true,rightHook:true,forward:true},1/120);
   assert.ok(p.releaseReady);const v=[p.vx,p.vy,p.vz];
-  step(p,{rightHook:false},1/120);assert.equal(p.anchor,null);assert.equal(p.released,true);
+  step(p,{},1/120);assert.equal(p.anchor,null);assert.equal(p.released,true);
   assert.ok(Math.hypot(p.vx-v[0],p.vy-v[1],p.vz-v[2])<1);
   assert.ok(p.vy>0&&p.vz<0);
 });

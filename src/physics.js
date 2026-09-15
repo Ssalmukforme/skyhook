@@ -1,9 +1,8 @@
 import { MAPS } from './maps.js';
 
 const STEP = 2;
-// Sideways velocity decay per second. Walls are lethal, so taut cables must not fling the runner sideways:
-// two hooks settle toward the middle quickly, one hook still swings you toward its side.
-const LATERAL_DAMPING = { free: 1.2, single: 2, dual: 3.5 };
+// Light air drag, identical in every direction: nothing steers the runner away from walls.
+const AIR_DRAG = .025;
 const smooth = t => t * t * (3 - 2 * t);
 
 // Centripetal Catmull-Rom keeps tight control points from overshooting into loops.
@@ -127,14 +126,23 @@ export function createPlayer(course = DEFAULT) {
   place(p, course, 0, 0, 57);
   return p;
 }
+// The runner's own horizontal travel direction. Only when nearly stationary does it fall back to the track.
+export function headingOf(p) {
+  const speed = Math.hypot(p.vx, p.vz);
+  if (speed > 1) return { hx: p.vx / speed, hz: p.vz / speed };
+  const f = frameAt(p.course, p.s);
+  return { hx: f.tx, hz: f.tz };
+}
 export function connect(p, side) {
-  const c = p.course, dir = side === 'left' ? -1 : 1;
+  const c = p.course, dir = side === 'left' ? -1 : 1, { hx, hz } = headingOf(p);
   let best = null, score = Infinity;
   for (const a of c.anchors) {
-    if (a.side !== dir) continue;
-    const forward = a.s - p.s, dist = Math.hypot(p.x - a.x, p.y - a.y, p.z - a.z);
+    // "Ahead" and "left/right" are measured from where the runner is actually flying, not from the course line.
+    const dx = a.x - p.x, dz = a.z - p.z, forward = dx * hx + dz * hz, across = dx * -hz + dz * hx;
+    if (Math.sign(across) !== dir) continue;
+    const dist = Math.hypot(p.x - a.x, p.y - a.y, p.z - a.z);
     if (forward < 24 || forward > 110 || dist > 145) continue;
-    const cost = Math.abs(forward - 65) + Math.abs(p.lateral - a.lateral) * .08;
+    const cost = Math.abs(forward - 65) + Math.abs(across) * .08;
     if (cost < score) { best = a; score = cost; }
   }
   if (best) {
@@ -180,11 +188,10 @@ export function step(p, input, dt) {
     hook.rope = Math.max(hook.targetRope, hook.rope - (p.y < loc.ground + 30 ? 42 : 24) * dt);
     hook.reelSpeed = (hook.rope - oldRope) / dt; hook.tension = 0;
   }
-  // Damp sideways drift strongly and forward motion lightly, measured in the local track frame.
-  let vf = p.vx * loc.tx + p.vz * loc.tz, vl = p.vx * loc.rx + p.vz * loc.rz;
-  vf = (vf + push * dt) * Math.exp(-.025 * dt);
-  vl = (vl + gust * dt) * Math.exp(-(hooks.length === 2 ? LATERAL_DAMPING.dual : hooks.length ? LATERAL_DAMPING.single : LATERAL_DAMPING.free) * dt);
-  p.vx = loc.tx * vf + loc.rx * vl; p.vz = loc.tz * vf + loc.rz * vl;
+  // W/S push along the runner's own travel direction, never along the course, so holding W cannot bend you round a curve.
+  // Wind pushes across the pass; drag is the same in every direction.
+  const { hx, hz } = headingOf(p), drag = Math.exp(-AIR_DRAG * dt);
+  p.vx = (p.vx + (hx * push + loc.rx * gust) * dt) * drag; p.vz = (p.vz + (hz * push + loc.rz * gust) * dt) * drag;
   p.vy += c.gravity * dt;
   const speed = Math.hypot(p.vx, p.vy, p.vz);
   if (speed > c.speedCap) { const scale = c.speedCap / speed; p.vx *= scale; p.vy *= scale; p.vz *= scale; }

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createRunner, animateRunner, cueRunner, resetRunner } from './runner.js';
 import './style.css';
 import { MAPS } from './maps.js';
-import { COURSES, createPlayer, step, formatTime, cleanRecords, frameAt } from './physics.js';
+import { COURSES, createPlayer, step, formatTime, cleanRecords, frameAt, headingOf } from './physics.js';
 import { buildWorld } from './worlds.js';
 import { fetchBoard, submitRun, describeError } from './leaderboard.js';
 
@@ -309,11 +309,11 @@ function updateHero(dt) {
     cableOutlet.getWorldPosition(cableOrigin); setRope(cableOrigin.x, cableOrigin.y, cableOrigin.z, menuAnchor.x, menuAnchor.y, menuAnchor.z); rope.visible = true; ropes.left.visible = false; rope.material.color.set(env.rope);
   } else {
     heroTarget.set(player.x, player.y, player.z); hero.position.lerp(heroTarget, 1 - Math.exp(-24 * dt)); hero.scale.setScalar(1.2);
-    // The rig animates in track-local space, so feed it velocities relative to the current heading.
-    const f = frameAt(course, player.s), vl = player.vx * f.rx + player.vz * f.rz, vf = player.vx * f.tx + player.vz * f.tz;
-    const anchor = player.anchor ? { x: player.lateral + ((player.anchor.x - player.x) * f.rx + (player.anchor.z - player.z) * f.rz) } : null;
-    animateRunner(runner, { x: player.lateral, vx: vl, vy: player.vy, vz: -vf, anchor, hooks: player.hooks, tension: player.tension }, dt, t, { ready: mode === 'countdown' });
-    hero.rotation.y += f.heading;
+    // The rig animates relative to where the runner is actually flying (not the course line).
+    const { hx, hz } = headingOf(player), rx = -hz, rz = hx, vf = player.vx * hx + player.vz * hz;
+    const anchor = player.anchor ? { x: (player.anchor.x - player.x) * rx + (player.anchor.z - player.z) * rz } : null;
+    animateRunner(runner, { x: 0, vx: 0, vy: player.vy, vz: -vf, anchor, hooks: player.hooks, tension: player.tension }, dt, t, { ready: mode === 'countdown' });
+    hero.rotation.y += Math.atan2(-hx, -hz);
     for (const side of ['left', 'right']) {
       const hook = player.hooks[side], line = ropes[side]; line.visible = !!hook;
       if (hook) { const a = hook.anchor; runner.cableOutlets[side].getWorldPosition(cableOrigin); setRope(cableOrigin.x, cableOrigin.y, cableOrigin.z, a.x, a.y, a.z, line); line.material.color.set(player.releaseReady ? '#9affd0' : side === 'left' ? '#9be2e4' : env.rope); }
@@ -327,16 +327,18 @@ function updateCamera(dt) {
     const [cs, cl, cy, ls, ll, ly] = menuCamera(); worldPoint(cs + Math.cos(t) * 4, cl + Math.sin(t) * 5, cy + Math.cos(t) * 2, camTarget); worldPoint(ls, ll, ly, lookTarget);
     camera.position.lerp(camTarget, 1 - Math.exp(-2 * dt)); camera.lookAt(lookTarget); camera.fov = 53;
   } else {
-    const f = frameAt(course, player.s), speed = Math.hypot(player.vx, player.vy, player.vz);
-    tmp.set(f.tx, 0, f.tz); camForward.lerp(tmp, 1 - Math.exp(-4 * dt)).normalize();
-    const back = 17 + Math.min(8, speed * .11), lateralPull = player.lateral * .15;
-    camTarget.set(player.x - camForward.x * back - f.rx * lateralPull, player.y + 7, player.z - camForward.z * back - f.rz * lateralPull);
+    // Chase camera sits behind the runner's own travel direction; it never swings to follow the course.
+    const { hx, hz } = headingOf(player), speed = Math.hypot(player.vx, player.vy, player.vz);
+    tmp.set(hx, 0, hz); camForward.lerp(tmp, 1 - Math.exp(-4 * dt)).normalize();
+    const back = 17 + Math.min(8, speed * .11);
+    camTarget.set(player.x - camForward.x * back, player.y + 7, player.z - camForward.z * back);
     const horizontal = 1 - Math.exp(-7 * dt);
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, camTarget.x, horizontal);
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, camTarget.y, 1 - Math.exp(-(reducedMotion ? 7 : 2.8) * dt));
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, camTarget.z, horizontal);
-    const vl = player.vx * f.rx + player.vz * f.rz;
-    lookTarget.set(player.x + camForward.x * 35 + f.rx * vl * .2, player.y + 1 + (reducedMotion ? 0 : player.vy * .24), player.z + camForward.z * 35 + f.rz * vl * .2); camera.lookAt(lookTarget);
+    // Sideways slip relative to where the camera points, used only for a slight roll.
+    const vl = player.vx * -camForward.z + player.vz * camForward.x;
+    lookTarget.set(player.x + camForward.x * 35, player.y + 1 + (reducedMotion ? 0 : player.vy * .24), player.z + camForward.z * 35); camera.lookAt(lookTarget);
     if (!reducedMotion) camera.rotateZ(THREE.MathUtils.clamp(-vl * .003, -.055, .055));
     camera.fov = THREE.MathUtils.lerp(camera.fov, reducedMotion ? 65 : 60 + Math.min(24, speed * .36), 1 - Math.exp(-3 * dt));
   }
