@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAPS } from '../src/maps.js';
 import { COURSES, createPlayer, step, frameAt, locate, BODY_RADIUS } from '../src/physics.js';
-import { buildWorld } from '../src/worlds.js';
+import { buildWorld, meadowLandmark } from '../src/worlds.js';
 
 // Build every real map (the same geometry the game draws) once and collide against it.
 const worlds = Object.fromEntries(MAPS.map(m => [m.id, buildWorld(m, COURSES[m.id])]));
@@ -35,6 +35,8 @@ test('flying outward from the course centre, the first crash is the drawn object
     garden: c => { const a = firstHook(c), lat = Math.abs(a.lateral); return [a.s, a.side, a.y - a.ground - 10, lat + 11, lat + 14]; },
     // Jungle: trunk of the kapok tree carrying the first hook (centre 9 m outside it, 2.2–3.5 m radius).
     jungle: c => { const a = firstHook(c), lat = Math.abs(a.lateral); return [a.s, a.side, 20, lat + 5, lat + 7.5]; },
+    // Meadow: whitewashed windmill tower carrying the first windmill hook (centre 10 m outside it, about 6 m radius at 20 m up).
+    meadow: c => { const a = c.anchors.find(x => x.s > 150 && meadowLandmark(c, x) === 'windmill'), lat = Math.abs(a.lateral); return [a.s, a.side, 20, lat + 3.5, lat + 5]; },
   };
   for (const map of MAPS) {
     const c = COURSES[map.id], { collider } = worlds[map.id], [s, side, height, min, max] = probes[map.id](c);
@@ -74,7 +76,7 @@ test('every map can be finished with the real geometry by steering with the hook
   }
 });
 
-test('Emerald Ruins arches are solid stone: pass under the lintel and between the pillars, crash into either', () => {
+test('Monsoon Ruins arches are solid stone: pass under the lintel and between the pillars, crash into either', () => {
   const c = COURSES.jungle, { collider } = worlds.jungle, { halfWidth, height } = c.def.archOpening;
   for (const t of c.def.arches) {
     const s = t * c.length, hit = (lateral, h) => collider.hits(...point(c, s, lateral, h), BODY_RADIUS);

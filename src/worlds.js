@@ -29,6 +29,10 @@ export const ENVIRONMENTS = {
     sunColor: '#fff1c8', sun: 2.9, disc: '#fff8e0', discSize: 30, glow: '#fffbe0', glowOpacity: .2, exposure: 1.1, sunDir: [220, 190, -600], lightOffset: [100, 160, -80],
     gate: '#ffd76a', gateSoft: '#fff2b0', gateMarker: '#fff6cf', marker: '#8dffb0', label: '#fff2b0', rope: '#f7ffd8',
     particles: { count: 320, color: '#e8ff9a', size: .22, opacity: .75, fall: -.25, drift: [.4, 0, .3] }, stars: 0, aurora: 0 },
+  meadow: { skyTop: '#5aa6e8', skyMiddle: '#a9d6f2', skyBottom: '#fff1c9', fog: '#d9e8d6', fogDensity: .0017, hemiSky: '#fff5dc', hemiGround: '#7d9a55', hemi: 2.5,
+    sunColor: '#fff0c8', sun: 3.4, disc: '#fffbe8', discSize: 30, glow: '#fff4c8', glowOpacity: .16, exposure: 1.08, sunDir: [-240, 230, -580], lightOffset: [-110, 160, -90],
+    gate: '#ff7a45', gateSoft: '#ffd27a', gateMarker: '#fff0c4', marker: '#ff7a45', label: '#fff4d6', rope: '#fff6dc',
+    particles: { count: 220, color: '#ffffff', size: .26, opacity: .8, fall: -.5, drift: [1.4, 0, .6] }, stars: 0, aurora: 0 },
 };
 
 const cube = new THREE.BoxGeometry(1, 1, 1);
@@ -174,7 +178,7 @@ function goalPad(kit, colors) {
   return g;
 }
 
-/* ---------------------------------------------------------------- 01 SUNSET AVENUE */
+/* ---------------------------------------------------------------- 01 MARIGOLD AVENUE */
 function sunset(kit) {
   const { box, cylinder, random, range, course, root } = kit, ANCHORS = course.anchors;
   const facades = ['#9d777d', '#bd8e86', '#bb9c94', '#c48775', '#82788c', '#ceab93', '#a49b9f'];
@@ -238,7 +242,7 @@ function sunset(kit) {
   return { dark: mat('#666679'), bright: mat('#e4b686', { emissive: '#ffbe77', emissiveIntensity: .3 }) };
 }
 
-/* ---------------------------------------------------------------- 02 NEON HARBOR */
+/* ---------------------------------------------------------------- 02 LANTERN HARBOR */
 function harbor(kit) {
   const { box, shape, cylinder, at, random, range, pick, course, root, bounds } = kit, hw = course.halfWidth, end = course.total - course.pre;
   const neon = ['#ff4fd8', '#3ff3ff', '#9b6bff', '#ffcc4a'];
@@ -333,7 +337,7 @@ function harbor(kit) {
   return lists;
 }
 
-/* ---------------------------------------------------------------- 03 RED CANYON */
+/* ---------------------------------------------------------------- 03 RUST CANYON */
 function canyon(kit) {
   const { box, shape, cylinder, at, random, range, pick, course, root, bounds } = kit, hw = course.halfWidth, end = course.total - course.pre;
   const wave = (s, k) => Math.sin(s * .037 + k * 1.7) * 2.6 + Math.sin(s * .113 + k * 4.1) * 1.4 + Math.sin(s * .21 + k) * .7;
@@ -392,7 +396,7 @@ function canyon(kit) {
   return {};
 }
 
-/* ---------------------------------------------------------------- 04 AURORA PASS */
+/* ---------------------------------------------------------------- 04 FIRWOOD PASS */
 function aurora(kit) {
   const { box, shape, cylinder, at, random, range, pick, course, root, bounds } = kit, hw = course.halfWidth, end = course.total - course.pre;
   const lakeFrame = frameAt(course, course.length * .43), lake = { x: lakeFrame.x - lakeFrame.rx * 190, z: lakeFrame.z - lakeFrame.rz * 190 };
@@ -460,7 +464,7 @@ function aurora(kit) {
   return {};
 }
 
-/* ---------------------------------------------------------------- 05 CLOUD GARDEN */
+/* ---------------------------------------------------------------- 05 CUMULUS GARDEN */
 function garden(kit) {
   const { box, shape, cylinder, at, random, range, pick, course, root, bounds } = kit, hw = course.halfWidth, end = course.total - course.pre;
   // Cloud sea below the course.
@@ -558,7 +562,7 @@ function garden(kit) {
   return {};
 }
 
-/* ---------------------------------------------------------------- 06 EMERALD RUINS */
+/* ---------------------------------------------------------------- 06 MONSOON RUINS */
 function jungle(kit) {
   const { box, shape, cylinder, at, random, range, pick, course, root, bounds } = kit, hw = course.halfWidth, end = course.total - course.pre;
   const stone = ['#7d8a70', '#8a9579', '#6f7c63'], moss = ['#4f7a3f', '#5f8a47', '#3f6a35'], leaves = ['#2f6b35', '#3f8a3f', '#2a5a2e', '#4d9a45'];
@@ -630,11 +634,124 @@ function jungle(kit) {
   return {};
 }
 
-const THEMES = { sunset, harbor, canyon, aurora, garden, jungle };
+/* ---------------------------------------------------------------- 02 HAYSTACK LANE */
+// Which landmark carries a hook: rows of anchors cycle windmill, poplar, silo, offset per side so the two sides differ.
+export function meadowLandmark(course, anchor) {
+  const row = Math.round((anchor.s - course.def.anchor.first) / course.def.anchor.spacing);
+  return ['windmill', 'poplar', 'silo'][(row + (anchor.side > 0 ? 1 : 0)) % 3];
+}
+function meadow(kit) {
+  const { box, shape, cylinder, at, random, range, pick, course, root, bounds } = kit, hw = course.halfWidth, end = course.total - course.pre;
+  const blob = new THREE.IcosahedronGeometry(1, 0), cone = new THREE.ConeGeometry(1, 1, 8);
+  const crops = ['#d9b54a', '#8fbf4f', '#c9a23c', '#a7cc62', '#e2c566', '#7fae45'], wood = '#7a5a3e';
+
+  // Dirt lane with grass verges, patchwork fields beyond: every 60 m of field gets its own crop colour.
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(bounds.maxX - bounds.minX + 2400, bounds.maxZ - bounds.minZ + 2400), mat('#8db552'));
+  floor.rotation.x = -Math.PI / 2; floor.position.set(bounds.cx, bounds.minY - .6, bounds.cz); floor.receiveShadow = true; root.add(floor);
+  kit.ribbon(-100, end + 60, 4, s => {
+    const block = Math.floor((s + 100) / 60), left = crops[(block + 3) % crops.length], right = crops[block % crops.length];
+    return [[-(hw + 70), -.3, left], [-(hw + 12), 0, left], [-(hw + 9), .04, '#6f9a45'], [-6, .06, '#6f9a45'], [-4, .1, '#b89468'], [4, .1, '#b89468'], [6, .06, '#6f9a45'], [hw + 9, .04, '#6f9a45'], [hw + 12, 0, right], [hw + 70, -.3, right]];
+  });
+
+  // Low split-rail fences mark the edges of the lane (well under flying height).
+  for (let s = -80; s < end + 40; s += 6) for (const side of [-1, 1]) {
+    const g = at(s, side * (hw + 8), 0);
+    box(0, .7, 0, .25, 1.4, .25, wood, g); box(0, 1.1, -3, .12, .14, 6.2, '#8a6a4a', g); box(0, .55, -3, .12, .14, 6.2, '#8a6a4a', g);
+  }
+
+  // Hook points hang from three kinds of farm landmark, mixed so neither side is a row of identical towers:
+  // windmills (sails turn on the far side), giant poplars and grain silos, each with a wooden arm out to the hook.
+  const sail = new THREE.BoxGeometry(.3, 14, 2.8); sail.translate(0, 8.5, 0);
+  const sailMat = mat('#f7f1e3'), spinners = [], dome = new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  course.anchors.forEach(a => {
+    const h = a.y - a.ground, g = at(a.s, 0, 0), side = a.side, lat = Math.abs(a.lateral), kind = meadowLandmark(course, a);
+    const light = () => box(side * lat, h - 1.4, 0, .9, 1.4, .9, glowMat('#ffd27a', 1.4), g);
+    if (kind === 'windmill') {
+      const x = side * (lat + 10), top = h + 14, radius = y => 6.5 - 2.3 * y / top;
+      cylinder(x, top / 2, 0, radius(top), radius(0), top, pick(['#f3ead8', '#efe2c8', '#e8d9bd']), g, 8);
+      const roof = shape(cone, pick(['#b5523b', '#9c4a3a', '#6d5a48']), x, top + 4.5, 0, g, true); roof.scale.set(radius(top) + 1, 9, radius(top) + 1);
+      for (let y = 30; y < top - 10; y += 22) box(x - side * (radius(y) - .1), y, 0, .5, 3.2, 2, '#5f86ad', g);
+      box(x - side * (radius(0) - .2), 2.4, 0, .5, 4.8, 3, '#6b4a33', g);
+      box(side * (lat + 3.6), h, 0, 8, .9, .9, wood, g, true); light();
+      const f = frameAt(course, a.s), hubLat = side * (lat + 10 + radius(top - 8) + 1.2), hub = new THREE.Group();
+      hub.position.set(f.x + f.rx * hubLat, f.y + top - 8, f.z + f.rz * hubLat); hub.rotation.y = f.heading; hub.userData.nonSolid = true; root.add(hub);
+      const rotor = new THREE.Group(); hub.add(rotor);
+      for (let k = 0; k < 4; k++) { const m = new THREE.Mesh(sail, sailMat); m.rotation.x = k * Math.PI / 2; m.castShadow = true; rotor.add(m); }
+      rotor.userData.speed = range(.5, .9) * (random() > .5 ? 1 : -1); rotor.rotation.x = range(0, 6.28); spinners.push(rotor);
+    } else if (kind === 'poplar') {
+      const x = side * (lat + range(11, 14)), top = h + range(12, 22);
+      cylinder(x, top * .45, 0, .9, 1.8, top * .9, '#6a4e38', g, 7);
+      for (let y = top * .22, k = 0; y < top; y += 9, k++) {
+        const r = 5.4 * Math.sin(Math.PI * Math.min(.95, (y - top * .12) / (top * .95))) + 1.4;
+        const leaf = shape(blob, pick(['#4f8a3a', '#5e9a44', '#447a33']), x + range(-.6, .6), y, range(-.6, .6), g, true); leaf.scale.set(r, 7, r);
+      }
+      box((x + side * lat) / 2, h, 0, Math.abs(x) - lat + 1, 1.1, 1.1, '#5b4330', g, true); light();
+    } else {
+      const x = side * (lat + range(12, 15)), top = h + range(6, 12), r = 6.2, metal = pick(['#c9cfd3', '#b8c2c8', '#d5d0c4']);
+      cylinder(x, top / 2, 0, r, r, top, metal, g, 12);
+      for (let y = 8; y < top; y += 9) cylinder(x, y, 0, r + .25, r + .25, .5, '#9aa3a8', g, 12);
+      shape(dome, metal, x, top, 0, g, true).scale.setScalar(r);
+      for (let y = 4; y < top; y += 3) box(x - side * (r + .5), y, 0, .5, .2, 1.8, '#6f7478', g);
+      box(x - side * (r + .5), top / 2, .9, .25, top, .25, '#6f7478', g); box(x - side * (r + .5), top / 2, -.9, .25, top, .25, '#6f7478', g);
+      box(side * (lat + (Math.abs(x) - r - lat) / 2), h, 0, Math.abs(x) - r - lat + 1, .9, .9, wood, g, true); light();
+      if (random() > .5) cylinder(x + side * 9, (top - 18) / 2, 5, 3.4, 3.4, top - 18, metal, g, 10);
+    }
+  });
+  kit.updaters.push(dt => spinners.forEach(r => { r.rotation.x += r.userData.speed * dt; }));
+
+  // Fields: round hay bales, a few tall haystacks, trees along the field edges, grazing sheep.
+  const bale = new THREE.CylinderGeometry(1.5, 1.5, 2.2, 10);
+  for (let s = -60; s < end + 40; s += 18) for (const side of [-1, 1]) {
+    if (random() > .55) continue;
+    const g = at(s + range(-6, 6), side * range(hw + 32, hw + 150), 0);
+    for (let k = 0; k < 1 + Math.floor(random() * 3); k++) { const m = shape(bale, '#d8b45c', range(-5, 5), 1.5, range(-5, 5), g, true); m.rotation.set(0, range(0, 3), Math.PI / 2); }
+  }
+  for (let s = 0; s < end; s += 70) for (const side of [-1, 1]) {
+    if (random() > .5) continue;
+    const g = at(s + range(-15, 15), side * range(hw + 40, hw + 120), 0), hh = range(7, 11);
+    shape(cone, '#e0bd62', 0, hh / 2, 0, g, true).scale.set(hh * .5, hh, hh * .5);
+    cylinder(0, hh + .6, 0, .12, .12, 1.4, wood, g, 5);
+  }
+  for (let s = -60; s < end + 60; s += 24) for (const side of [-1, 1]) {
+    if (random() > .45) continue;
+    const lateral = side * range(hw + 34, hw + 230), f = frameAt(course, s), wx = f.x + f.rx * lateral, wz = f.z + f.rz * lateral;
+    if (kit.nearest(wx, wz).d < hw + 30) continue;
+    const g = at(s, lateral, 0), th = range(6, 10);
+    cylinder(0, th / 2, 0, .5, .8, th, '#6a4e38', g, 6);
+    const crown = shape(blob, pick(['#4f8a3a', '#5e9a44', '#447a33']), 0, th + range(3, 5), 0, g, true); crown.scale.set(range(5, 8), range(5, 7), range(5, 8));
+  }
+  for (let i = 0; i < 40; i++) {
+    const s = range(0, end), side = random() > .5 ? 1 : -1, g = at(s, side * range(hw + 25, hw + 110), 0);
+    g.rotation.y += range(0, 6.28);
+    box(0, 1.1, 0, 1.4, 1.1, 2.2, '#f4f1ea', g, true); box(0, 1.5, 1.4, .7, .7, .8, '#3b3533', g);
+    for (const [lx, lz] of [[-.45, -.7], [.45, -.7], [-.45, .7], [.45, .7]]) box(lx, .3, lz, .22, .6, .22, '#3b3533', g);
+  }
+
+  // Red barns and a farmhouse set back from the lane, rolling hills on the horizon.
+  for (const t of [.08, .3, .52, .74, .93]) {
+    const side = Math.round(t * 10) % 2 ? 1 : -1, g = at(course.length * t, side * (hw + 95), 0), red = pick(['#b8473a', '#a63f35']);
+    box(0, 7, 0, 18, 14, 26, red, g, true);
+    for (const s of [-1, 1]) { const r = box(s * 5, 16.5, 0, 12.4, 1, 27.5, '#5a4a44', g, true); r.rotation.z = -s * .62; }
+    box(0, 16, 13.05, 9, 5, .2, red, g); box(0, 5, 13.1, 7, 9, .2, '#f2ede2', g); box(0, 5, 13.2, 5.6, 7.6, .2, '#7a3a30', g);
+    cylinder(-side * 15, 11, 6, 3, 3, 22, '#c9c2b4', g, 10); shape(new THREE.SphereGeometry(3, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), '#8a8f96', -side * 15, 22, 6, g, true);
+  }
+  for (let i = 0; i < 26; i++) {
+    const a = i / 26 * Math.PI * 2, r = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 2 + range(420, 700);
+    const hill = shape(blob, pick(['#7fa94c', '#8db552', '#6e9a45']), bounds.cx + Math.cos(a) * r, bounds.minY - 20, bounds.cz + Math.sin(a) * r, kit.statics, false);
+    hill.scale.set(range(160, 260), range(50, 95), range(160, 260));
+  }
+
+  launchPad(kit, { body: '#c9a878', top: '#e8d6ae', strip: '#7a5a3e', chevron: '#ff7a45' });
+  goalPad(kit, { body: '#b89468', top: '#e8d6ae', check: '#b8473a' });
+  birds(kit, 14, '#4a4440', 60, 130);
+  return {};
+}
+
+const THEMES = { sunset, harbor, canyon, aurora, garden, jungle, meadow };
 
 export function buildWorld(map, course) {
   const env = ENVIRONMENTS[map.theme];
-  const kit = createKit(course, map.id === 'sunset' ? 391 : 391 + Number(map.no) * 977);
+  const kit = createKit(course, map.seed);
   const instanceMaterials = THEMES[map.theme](kit, course, map, env) || {};
   bake(kit, instanceMaterials);
   const { root } = kit;

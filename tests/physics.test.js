@@ -55,7 +55,7 @@ test('hitting a real object crashes back to the last checkpoint; open air beside
   assert.ok(Math.abs(Math.atan2(q.vx,q.vz)-dir)<1e-9);
 });
 test('hooks aim from the runner\'s own direction, not from the course line',()=>{
-  // Flying backwards down Sunset Avenue (+z): "ahead" is +z and the right hand points at the -x buildings.
+  // Flying backwards down Marigold Avenue (+z): "ahead" is +z and the right hand points at the -x buildings.
   const p=createPlayer();Object.assign(p,{gate:3,z:-500,vx:0,vz:30,vy:0,trackIndex:Math.round((500+80)/2)});
   step(p,{rightHook:true},1/120);
   assert.ok(p.hooks.right,'a hook connects');assert.ok(p.hooks.right.anchor.z>p.z,'anchor is ahead of the runner');assert.ok(p.hooks.right.anchor.x<0,'right hand of a +z runner is the -x side');
