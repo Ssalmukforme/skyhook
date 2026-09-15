@@ -127,3 +127,9 @@ body.side-ads #menu,body.side-ads #hud{left:190px;right:190px}
 .ad-play{position:absolute;left:50%;bottom:env(safe-area-inset-bottom);margin:0;transform:translateX(-50%);pointer-events:auto}
 body.touch #hud:has(.ad-play.filled) #touch-controls{bottom:calc(50px + env(safe-area-inset-bottom));padding-bottom:0}
 body.touch #hud:has(.ad-play.filled) .hud-bottom{bottom:calc(228px + env(safe-area-inset-bottom))}
+/* Language switch (/ Korean, /en/ English) next to the sound button. */
+.top-actions{display:flex;align-items:center;gap:8px}
+.lang-link{display:inline-flex;align-items:center;min-height:40px;padding:10px 14px;border:1px solid #fff3df40;border-radius:24px;background:#29253238;color:inherit;font-size:12px;text-decoration:none;letter-spacing:.5px}.lang-link:hover{border-color:var(--accent);color:var(--accent)}
+@media(max-width:600px){.lang-link{min-height:36px;padding:8px 12px}}
+@media(orientation:landscape) and (max-height:540px){.lang-link{min-height:34px;padding:7px 12px}}
+:lang(en) .map-tile[aria-selected="true"]::after{content:'SELECTED'}

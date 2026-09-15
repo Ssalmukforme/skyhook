@@ -1,6 +1,7 @@
 // Global leaderboard in the shared ssalmuk_ranking Supabase project (supabase/migrations): this game is
 // skyhook and each map is a board. Every call fails soft: local records keep working without Supabase.
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './ranking-config.js';
+import { t } from './i18n.js';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL || SUPABASE_URL;
 const KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || SUPABASE_PUBLISHABLE_KEY;
@@ -69,9 +70,9 @@ export async function submitRun({ mapId, name, time, falls }) {
 }
 
 export function describeError(error) {
-  if (error?.code === 'not_configured') return '랭킹이 아직 설정되지 않았어요.';
-  if (error?.code === 'rate_limited') return '잠시 후 다시 시도해 주세요.';
-  if (error?.code === 'implausible_score') return '기록을 확인할 수 없어 랭킹에 등록되지 않았어요.';
-  if (error?.code === 'invalid_name') return '이름을 확인해 주세요.';
-  return '랭킹 서버에 연결할 수 없어요.';
+  if (error?.code === 'not_configured') return t('랭킹이 아직 설정되지 않았어요.', 'The leaderboard is not set up yet.');
+  if (error?.code === 'rate_limited') return t('잠시 후 다시 시도해 주세요.', 'Please try again in a moment.');
+  if (error?.code === 'implausible_score') return t('기록을 확인할 수 없어 랭킹에 등록되지 않았어요.', 'This run could not be verified, so it was not ranked.');
+  if (error?.code === 'invalid_name') return t('이름을 확인해 주세요.', 'Please check your name.');
+  return t('랭킹 서버에 연결할 수 없어요.', 'Could not reach the leaderboard server.');
 }

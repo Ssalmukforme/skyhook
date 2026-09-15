@@ -1,4 +1,5 @@
 import { AD_SLOTS } from './ads-config.js';
+import { t } from './i18n.js';
 
 // Each banner runs in its own iframe, so Adsterra's global `atOptions` of one slot never clobbers another
 // and the ad script cannot touch the game page. A slot loads when its screen becomes visible
@@ -22,7 +23,7 @@ function unitFor(name) {
 
 function frame({ width, height, code }) {
   const iframe = document.createElement('iframe');
-  Object.assign(iframe, { width, height, title: '광고', scrolling: 'no' });
+  Object.assign(iframe, { width, height, title: t('광고', 'Advertisement'), scrolling: 'no' });
   iframe.setAttribute('frameborder', '0');
   iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;background:transparent}</style></head><body>${code}</body></html>`;
   return iframe;

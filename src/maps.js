@@ -5,7 +5,8 @@ export const MAPS = [
   {
     id: 'sunset', no: '01', theme: 'sunset',
     name: '선셋 애비뉴', en: 'SUNSET AVENUE', tagline: '따뜻한 빛, 긴 그림자, 끝없는 스윙.',
-    trait: '곧게 뻗은 대로 · 입문 코스', difficulty: 1, recordKey: 'skyhook.avenue.pendulum.v2',
+    trait: '곧게 뻗은 대로 · 입문 코스',
+    nameEn: 'Sunset Avenue', taglineEn: 'Warm light, long shadows, endless swings.', traitEn: 'Straight boulevard · Beginner course', difficulty: 1, recordKey: 'skyhook.avenue.pendulum.v2',
     points: [[0, 80], [0, -1260]], length: 1050, gates: 7, gateOffsets: [0, -8, 10, 0, -10, 8, 0],
     halfWidth: 22, anchor: { spacing: 52, lateral: 26, heights: [76, 80, 84], first: -25 },
     accent: '#ffc17e',
@@ -13,7 +14,8 @@ export const MAPS = [
   {
     id: 'harbor', no: '02', theme: 'harbor',
     name: '네온 하버', en: 'NEON HARBOR', tagline: '물 위로 번지는 네온, S자로 휘는 운하.',
-    trait: 'S자 운하 · 크레인 스윙', difficulty: 2, recordKey: 'skyhook.harbor.v1',
+    trait: 'S자 운하 · 크레인 스윙',
+    nameEn: 'Neon Harbor', taglineEn: 'Neon spilling over the water, a canal bending in an S.', traitEn: 'S-curve canal · Crane swings', difficulty: 2, recordKey: 'skyhook.harbor.v1',
     points: [[0, 80], [0, 0], [0, -160], [35, -300], [115, -410], [160, -545], [130, -690], [50, -800], [10, -950], [40, -1100], [115, -1210], [160, -1340], [170, -1460]],
     gates: 8, gateOffsets: [0, 6, -8, 0, 8, -6, 4, 0],
     halfWidth: 24, anchor: { spacing: 48, lateral: 28, heights: [72, 80, 86, 78], first: -25 },
@@ -22,7 +24,8 @@ export const MAPS = [
   {
     id: 'canyon', no: '03', theme: 'canyon',
     name: '레드 캐니언', en: 'RED CANYON', tagline: '구불구불한 협곡을 따라 끝없이 내리꽂는 활강.',
-    trait: '좁은 급커브 · 내리막 가속', difficulty: 3, recordKey: 'skyhook.canyon.v1',
+    trait: '좁은 급커브 · 내리막 가속',
+    nameEn: 'Red Canyon', taglineEn: 'A long downhill dive through a winding canyon.', traitEn: 'Tight bends · Downhill speed', difficulty: 3, recordKey: 'skyhook.canyon.v1',
     points: [[0, 80], [0, 0], [0, -110], [-55, -230], [-70, -370], [10, -490], [85, -600], [75, -750], [-10, -860], [-70, -990], [-40, -1130], [30, -1230], [50, -1350], [50, -1470]],
     elevation: [[-100, 0], [60, 0], [300, -18], [650, -48], [1000, -78], [1400, -96]],
     gates: 8, gateOffsets: [0, -4, 5, 0, -5, 4, -3, 0],
@@ -32,7 +35,8 @@ export const MAPS = [
   {
     id: 'aurora', no: '04', theme: 'aurora',
     name: '오로라 설원', en: 'AURORA PASS', tagline: '오로라 아래 거대한 전나무 숲을 돌아 오르는 헤어핀.',
-    trait: '180° 헤어핀 · 오르막 · 옆바람', difficulty: 2, recordKey: 'skyhook.aurora.v1',
+    trait: '180° 헤어핀 · 오르막 · 옆바람',
+    nameEn: 'Aurora Pass', taglineEn: 'A hairpin climb around giant firs under the aurora.', traitEn: '180° hairpin · Uphill · Crosswind', difficulty: 2, recordKey: 'skyhook.aurora.v1',
     points: [[0, 80], [0, 0], [0, -180], [25, -340], [110, -460], [240, -500], [360, -440], [410, -310], [395, -160], [410, -20], [470, 90], [560, 140], [660, 150], [760, 150]],
     elevation: [[-100, 0], [80, 0], [400, 12], [800, 36], [1200, 50]],
     gates: 8, gateOffsets: [0, 5, -6, 0, 6, -4, 5, 0],
@@ -42,7 +46,8 @@ export const MAPS = [
   {
     id: 'garden', no: '05', theme: 'garden',
     name: '구름 정원', en: 'CLOUD GARDEN', tagline: '구름 바다 위 떠 있는 섬들, 롤러코스터 같은 고저차.',
-    trait: '나선 곡선 · 파도형 고저차 · 저중력', difficulty: 3, recordKey: 'skyhook.garden.v1',
+    trait: '나선 곡선 · 파도형 고저차 · 저중력',
+    nameEn: 'Cloud Garden', taglineEn: 'Floating islands over a sea of clouds, rollercoaster hills.', traitEn: 'Spiral curves · Rolling hills · Low gravity', difficulty: 3, recordKey: 'skyhook.garden.v1',
     points: [[0, 80], [0, 0], [-15, -150], [-80, -290], [-210, -350], [-350, -310], [-420, -190], [-400, -50], [-320, 60], [-190, 110], [-120, 230], [-130, 360], [-170, 480]],
     elevation: [[-100, 0], [60, 0], [240, 18], [420, 2], [600, 24], [780, 6], [960, 28], [1140, 10], [1320, 22]],
     gates: 9, gateOffsets: [0, -6, 6, 12, -8, 8, 10, -12, 0], gateLift: 54, gateHeight: 44,
@@ -52,7 +57,8 @@ export const MAPS = [
   {
     id: 'jungle', no: '06', theme: 'jungle',
     name: '에메랄드 정글', en: 'EMERALD RUINS', tagline: '안개 낀 정글 신전, 석조 아치 아래를 지그재그로.',
-    trait: '연속 지그재그 · 석조 아치 통과 · 오르막 뒤 급강하', difficulty: 3, recordKey: 'skyhook.jungle.v1',
+    trait: '연속 지그재그 · 석조 아치 통과 · 오르막 뒤 급강하',
+    nameEn: 'Emerald Ruins', taglineEn: 'A misty jungle temple, zigzagging under stone arches.', traitEn: 'Zigzags · Stone arches · Climb then plunge', difficulty: 3, recordKey: 'skyhook.jungle.v1',
     points: [[0, 80], [0, 0], [0, -150], [85, -270], [95, -410], [5, -530], [-5, -670], [85, -790], [95, -930], [5, -1050], [-5, -1190], [40, -1310], [45, -1440], [45, -1560]],
     elevation: [[-100, 0], [80, 0], [420, 26], [700, 30], [1000, 6], [1300, -18]],
     gates: 8, gateOffsets: [0, 0, 0, 0, 0, 0, 0, 0],

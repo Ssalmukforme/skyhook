@@ -5,13 +5,15 @@ import { MAPS } from './maps.js';
 import { COURSES, createPlayer, step, formatTime, cleanRecords, frameAt, headingOf } from './physics.js';
 import { buildWorld } from './worlds.js';
 import { fetchBoard, submitRun, describeError } from './leaderboard.js';
+import { t as tr, localizeMaps } from './i18n.js';
+localizeMaps(MAPS);
 import './ads.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#world');
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); }
-catch (error) { $('#loading').textContent = '3D 화면을 열 수 없습니다. 브라우저의 하드웨어 가속을 켜고 다시 열어 주세요.'; throw error; }
+catch (error) { $('#loading').textContent = tr('3D 화면을 열 수 없습니다. 브라우저의 하드웨어 가속을 켜고 다시 열어 주세요.', 'Could not start 3D. Turn on hardware acceleration in your browser and reload.'); throw error; }
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
 // The canvas is sized by CSS (full screen, or between the side ads); the renderer follows its box.
 const viewSize = () => [canvas.clientWidth || innerWidth, canvas.clientHeight || innerHeight];
@@ -110,7 +112,7 @@ function loadRecords() {
   try { records = cleanRecords(JSON.parse(localStorage.getItem(map.recordKey) || '[]')); storageWorks = true; } catch { records = []; storageWorks = false; }
   refreshBest();
 }
-function refreshBest() { const best = records.length ? formatTime(records[0].time) : '--:--.---'; $('#best').textContent = best; $('#best-hud').textContent = 'BEST ' + best + (worldRecord ? ' · 1위 ' + formatTime(worldRecord) : ''); }
+function refreshBest() { const best = records.length ? formatTime(records[0].time) : '--:--.---'; $('#best').textContent = best; $('#best-hud').textContent = 'BEST ' + best + (worldRecord ? tr(' · 1위 ', ' · #1 ') + formatTime(worldRecord) : ''); }
 // Top-down route sketch generated from the real centerline.
 function drawRoute(svg, c, width, height, detailed) {
   const pts = []; for (let s = -20; s <= c.length + 20; s += 10) { const f = frameAt(c, s); pts.push([f.x, f.z]); }
@@ -133,6 +135,7 @@ function drawRoute(svg, c, width, height, detailed) {
   el('circle', { cx: sx, cy: sy, r: detailed ? 5 : 2.2, class: 'map-start' });
   el('circle', { cx: fx, cy: fy, r: detailed ? 4.5 : 2.2, class: 'map-finish' });
 }
+// Korean start label needs 로/으로 after the map name; English just says "Race <map>".
 const withDirection = name => { const code = name.charCodeAt(name.length - 1) - 0xAC00, final = code >= 0 && code < 11172 ? code % 28 : 0; return name + (final === 0 || final === 8 ? '로' : '으로'); };
 function storedBest(m) { try { return cleanRecords(JSON.parse(localStorage.getItem(m.recordKey) || '[]'))[0]?.time; } catch { return undefined; } }
 const starText = m => '★'.repeat(m.difficulty) + '☆'.repeat(Math.max(0, 3 - m.difficulty));
@@ -142,10 +145,10 @@ function renderMapCard() {
   $('#map-length').replaceChildren(document.createTextNode((course.length / 1000).toFixed(2)), Object.assign(document.createElement('span'), { textContent: ' km' }));
   $('#map-gates').replaceChildren(document.createTextNode(course.gates.length), Object.assign(document.createElement('span'), { textContent: ' GATES' }));
   $('#map-difficulty').replaceChildren(document.createTextNode('★'.repeat(map.difficulty)), Object.assign(document.createElement('span'), { textContent: ' ☆'.repeat(Math.max(0, 3 - map.difficulty)) }));
-  drawRoute($('#map-svg'), course, 300, 120, true); $('#map-svg').setAttribute('aria-label', `${map.name} 코스 약도`);
-  $('#start-label').textContent = `${withDirection(map.name)} 출발`;
+  drawRoute($('#map-svg'), course, 300, 120, true); $('#map-svg').setAttribute('aria-label', tr(`${map.name} 코스 약도`, `${map.name} route map`));
+  $('#start-label').textContent = tr(`${withDirection(map.name)} 출발`, `Race ${map.name}`);
   $('#hud-district').textContent = 'DISTRICT ' + map.no; $('#hud-name').textContent = map.name;
-  $('#result-course').textContent = map.name + ' · 완주 기록';
+  $('#result-course').textContent = map.name + tr(' · 완주 기록', ' · Finish time');
   $('#remaining').replaceChildren(document.createTextNode(course.length.toLocaleString() + ' '), Object.assign(document.createElement('small'), { textContent: 'm' }));
   mapTiles.forEach((tile, i) => tile.el.setAttribute('aria-selected', String(i === mapIndex)));
 }
@@ -154,14 +157,14 @@ function renderMapCard() {
 const el = (tag, className, text) => Object.assign(document.createElement(tag), className ? { className } : {}, text !== undefined ? { textContent: text } : {});
 const mapTiles = MAPS.map((m, i) => {
   const c = COURSES[m.id], tile = el('div', 'map-tile'); tile.setAttribute('role', 'option'); tile.style.setProperty('--tile-accent', m.accent);
-  const pick = el('button', 'tile-pick'); pick.type = 'button'; pick.setAttribute('aria-label', `${m.name} 선택`);
+  const pick = el('button', 'tile-pick'); pick.type = 'button'; pick.setAttribute('aria-label', tr(`${m.name} 선택`, `Select ${m.name}`));
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 200 80'); svg.setAttribute('class', 'tile-route'); svg.setAttribute('aria-hidden', 'true'); drawRoute(svg, c, 200, 80, false);
   const head = el('span', 'tile-head'); head.append(el('span', 'tile-no', m.no), el('span', 'tile-stars', starText(m)));
   const title = el('span', 'tile-title'); title.append(el('strong', '', m.name), el('small', '', m.en));
   const facts = el('span', 'tile-facts', `${(c.length / 1000).toFixed(2)} km · ${c.gates.length} GATES`);
-  const times = el('span', 'tile-times'); const mine = el('span', 'tile-best'), top = el('span', 'tile-world', '전체 1위 …'); times.append(mine, top);
+  const times = el('span', 'tile-times'); const mine = el('span', 'tile-best'), top = el('span', 'tile-world', tr('전체 1위 …', 'World #1 …')); times.append(mine, top);
   pick.append(svg, head, title, el('span', 'tile-trait', m.trait), facts, times);
-  const go = el('button', 'tile-go', '출발 ↗'); go.type = 'button'; go.setAttribute('aria-label', `${m.name} 바로 출발`);
+  const go = el('button', 'tile-go', tr('출발 ↗', 'Race ↗')); go.type = 'button'; go.setAttribute('aria-label', tr(`${m.name} 바로 출발`, `Race ${m.name} now`));
   tile.append(pick, go); $('#map-grid').append(tile);
   pick.addEventListener('click', () => { closeBrowser(); if (i !== mapIndex) loadMap(i); $('#start').focus(); });
   go.addEventListener('click', () => { closeBrowser(); if (i !== mapIndex) loadMap(i); begin(); });
@@ -183,11 +186,11 @@ function applyBrowserFilter() {
 const tileObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) loadTileWorld(mapTiles.find(t => t.el === entry.target)); }), { root: $('#map-grid') }) : null;
 function loadTileWorld(t, fresh = false) {
   if (!t || (t.loaded && !fresh)) return; t.loaded = true;
-  fetchBoard(t.map.id, { fresh }).then(data => { const e = data.entries[0]; t.top.textContent = e ? `전체 1위 ${formatTime(e.timeMs / 1000)}` : '전체 1위 아직 없음'; })
-    .catch(() => { t.loaded = false; t.top.textContent = '전체 랭킹 연결 안 됨'; });
+  fetchBoard(t.map.id, { fresh }).then(data => { const e = data.entries[0]; t.top.textContent = e ? tr(`전체 1위 ${formatTime(e.timeMs / 1000)}`, `World #1 ${formatTime(e.timeMs / 1000)}`) : tr('전체 1위 아직 없음', 'World #1 none yet'); })
+    .catch(() => { t.loaded = false; t.top.textContent = tr('전체 랭킹 연결 안 됨', 'Leaderboard offline'); });
 }
 function openBrowser() {
-  for (const t of mapTiles) { const best = t.map === map ? records[0]?.time : storedBest(t.map); t.mine.textContent = best ? `내 기록 ${formatTime(best)}` : '내 기록 없음'; }
+  for (const t of mapTiles) { const best = t.map === map ? records[0]?.time : storedBest(t.map); t.mine.textContent = best ? tr(`내 기록 ${formatTime(best)}`, `My best ${formatTime(best)}`) : tr('내 기록 없음', 'No run yet'); }
   applyBrowserFilter(); show('#map-browser');
   if (tileObserver) mapTiles.forEach(t => tileObserver.observe(t.el)); else mapTiles.forEach(t => loadTileWorld(t));
   const selected = mapTiles[mapIndex]; (selected.el.hidden ? visibleTiles()[0] : selected)?.pick.focus(); selected.el.scrollIntoView({ block: 'nearest' });
@@ -215,7 +218,7 @@ function begin() {
   clearInput(); player = createPlayer(course); resetRunner(runner); savedLocal = false; submitted = false; runBest = records[0]?.time ?? Infinity; accumulator = 0; mode = 'countdown'; countdown = 3;
   ['#menu', '#pause', '#result', '#records', '#help'].forEach(hide); show('#hud'); show('#countdown'); $('#countdown').textContent = '3'; document.body.classList.add('playing');
   world.gates.forEach(g => g.visible = true); worldPoint(-18, 0, 64, camera.position); camera.lookAt(worldPoint(60, 0, 57)); camForward.set(frameAt(course, 0).tx, 0, frameAt(course, 0).tz);
-  $('#save-form button').disabled = false; $('#save-form button').textContent = '랭킹 등록'; $('#submit-status').textContent = '';
+  $('#save-form button').disabled = false; $('#save-form button').textContent = tr('랭킹 등록', 'Submit'); $('#submit-status').textContent = '';
   toast(`${map.name}\n${map.trait}`, 3.5); wakeAudio();
 }
 function home() { mode = 'menu'; clearInput(); ['#hud', '#pause', '#result', '#countdown'].forEach(hide); $('#wall-warning').hidden = true; show('#menu'); document.body.classList.remove('playing'); world.gates.forEach(g => g.visible = true); refreshBest(); updateWorldInfo(); }
@@ -224,7 +227,7 @@ function resume() { mode = previousMode; clearInput(); hide('#pause'); if (mode 
 function finish() {
   mode = 'result'; clearInput(); hide('#hud'); show('#result'); $('#final-time').textContent = formatTime(player.time);
   $('#result-eyebrow').textContent = player.time < runBest ? 'NEW PERSONAL BEST' : 'COURSE COMPLETE';
-  $('#result-message').textContent = player.falls ? `완주! 복귀 ${player.falls}회 · 추가 시간 ${player.falls * 3}초 포함` : '한 번의 추락도 없이 완주했어요.';
+  $('#result-message').textContent = player.falls ? tr(`완주! 복귀 ${player.falls}회 · 추가 시간 ${player.falls * 3}초 포함`, `Finished! ${player.falls} reset${player.falls > 1 ? 's' : ''} · includes +${player.falls * 3}s penalty`) : tr('한 번의 추락도 없이 완주했어요.', 'A clean run with no resets.');
   try { $('#nickname').value = localStorage.getItem('skyhook.nickname') || $('#nickname').value; } catch { }
   boards.result.mapId = map.id; renderBoard('result'); chime(3);
 }
@@ -244,42 +247,42 @@ async function renderBoard(key, { fresh = false } = {}) {
   const b = boards[key], m = MAPS.find(x => x.id === b.mapId), root = $(b.list), standing = $(b.standing), token = ++b.token;
   document.querySelectorAll(`.board-tabs[data-board="${key}"] [data-tab]`).forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === b.tab)));
   if (key === 'records') document.querySelectorAll('#board-maps button').forEach(chip => chip.setAttribute('aria-pressed', String(chip.dataset.map === m.id)));
-  if (b.caption) $(b.caption).textContent = b.tab === 'global' ? `${m.name} · 모든 플레이어의 최고 기록` : `${m.name} · 이 브라우저에 저장된 기록`;
+  if (b.caption) $(b.caption).textContent = b.tab === 'global' ? tr(`${m.name} · 모든 플레이어의 최고 기록`, `${m.name} · Best times from all players`) : tr(`${m.name} · 이 브라우저에 저장된 기록`, `${m.name} · Runs saved in this browser`);
   root.replaceChildren(); standing.textContent = '';
   if (b.tab === 'local') {
     const list = localRecordsFor(m);
-    if (!list.length) emptyNote(root, '아직 기록이 없어요.\n첫 번째 완주 기록을 남겨보세요.');
+    if (!list.length) emptyNote(root, tr('아직 기록이 없어요.\n첫 번째 완주 기록을 남겨보세요.', 'No runs yet.\nFinish the course to set your first time.'));
     list.forEach((r, i) => root.append(rankRow(i + 1, r.name, r.time)));
     return;
   }
-  root.classList.add('loading'); emptyNote(root, '랭킹을 불러오는 중…');
+  root.classList.add('loading'); emptyNote(root, tr('랭킹을 불러오는 중…', 'Loading leaderboard…'));
   try {
     const data = await fetchBoard(m.id, { fresh });
     if (token !== b.token) return;
     root.replaceChildren();
-    if (!data.entries.length) emptyNote(root, '아직 아무도 완주하지 않았어요.\n첫 번째 1위가 되어 보세요.');
+    if (!data.entries.length) emptyNote(root, tr('아직 아무도 완주하지 않았어요.\n첫 번째 1위가 되어 보세요.', 'Nobody has finished yet.\nBe the first #1.'));
     data.entries.forEach(e => root.append(rankRow(e.rank, e.name, e.timeMs / 1000, { you: e.you })));
     const you = data.you;
-    standing.textContent = you ? `내 순위 ${you.rank}위 · ${formatTime(you.timeMs / 1000)} · 참가 ${data.total}명` : data.total ? `참가 ${data.total}명 · 완주 후 랭킹에 등록해 보세요` : '';
+    standing.textContent = you ? tr(`내 순위 ${you.rank}위 · ${formatTime(you.timeMs / 1000)} · 참가 ${data.total}명`, `Your rank #${you.rank} · ${formatTime(you.timeMs / 1000)} · ${data.total} players`) : data.total ? tr(`참가 ${data.total}명 · 완주 후 랭킹에 등록해 보세요`, `${data.total} players · Finish a run to get ranked`) : '';
   } catch (error) {
     if (token !== b.token) return;
-    root.replaceChildren(); emptyNote(root, `${describeError(error)}\n내 기록 탭에서 이 브라우저의 기록은 볼 수 있어요.`);
+    root.replaceChildren(); emptyNote(root, `${describeError(error)}\n${tr('내 기록 탭에서 이 브라우저의 기록은 볼 수 있어요.', 'Your runs in this browser are under My runs.')}`);
   } finally { if (token === b.token) root.classList.remove('loading'); }
 }
 let worldToken = 0, worldRecord = null;
 async function updateWorldInfo({ fresh = false } = {}) {
   const token = ++worldToken, id = map.id;
-  worldRecord = null; $('#world-best').textContent = '--:--.---'; $('#world-best').classList.remove('muted'); $('#world-label').textContent = '전체 1위'; $('#best-label').textContent = 'MY BEST'; refreshBest();
+  worldRecord = null; $('#world-best').textContent = '--:--.---'; $('#world-best').classList.remove('muted'); $('#world-label').textContent = tr('전체 1위', 'World #1'); $('#best-label').textContent = 'MY BEST'; refreshBest();
   try {
     const data = await fetchBoard(id, { fresh });
     if (token !== worldToken) return;
     const top = data.entries[0];
     worldRecord = top ? top.timeMs / 1000 : null;
-    $('#world-best').textContent = top ? formatTime(worldRecord) : '아직 없음'; $('#world-best').classList.toggle('muted', !top);
-    $('#world-label').textContent = top ? `전체 1위 · ${top.name}` : '전체 1위';
-    if (data.you) $('#best-label').textContent = `MY BEST · ${data.you.rank}위/${data.total}명`;
+    $('#world-best').textContent = top ? formatTime(worldRecord) : tr('아직 없음', 'None yet'); $('#world-best').classList.toggle('muted', !top);
+    $('#world-label').textContent = top ? tr(`전체 1위 · ${top.name}`, `World #1 · ${top.name}`) : tr('전체 1위', 'World #1');
+    if (data.you) $('#best-label').textContent = tr(`MY BEST · ${data.you.rank}위/${data.total}명`, `MY BEST · #${data.you.rank} of ${data.total}`);
     refreshBest();
-  } catch (error) { if (token === worldToken) { $('#world-best').textContent = error.code === 'not_configured' ? '랭킹 미설정' : '랭킹 서버 연결 안 됨'; $('#world-best').classList.add('muted'); } }
+  } catch (error) { if (token === worldToken) { $('#world-best').textContent = error.code === 'not_configured' ? tr('랭킹 미설정', 'Not set up') : tr('랭킹 서버 연결 안 됨', 'Leaderboard offline'); $('#world-best').classList.add('muted'); } }
 }
 $('#start').addEventListener('click', begin); $('#again').addEventListener('click', begin); $('#restart-pause').addEventListener('click', begin); $('#resume').addEventListener('click', resume); $('#pause-button').addEventListener('click', pause);
 document.querySelectorAll('.home-button').forEach(b => b.addEventListener('click', home));
@@ -304,20 +307,20 @@ $('#save-form').addEventListener('submit', async e => {
     try { localStorage.setItem(map.recordKey, JSON.stringify(records)); storageWorks = true; } catch { storageWorks = false; }
     savedLocal = true; refreshBest();
   }
-  button.disabled = true; button.textContent = '등록 중…'; status.className = 'submit-status'; status.textContent = '전체 랭킹에 등록하는 중…';
+  button.disabled = true; button.textContent = tr('등록 중…', 'Submitting…'); status.className = 'submit-status'; status.textContent = tr('전체 랭킹에 등록하는 중…', 'Submitting to the world leaderboard…');
   try {
     const result = await submitRun(run), s = result.standing;
-    submitted = true; button.textContent = '등록됨';
+    submitted = true; button.textContent = tr('등록됨', 'Submitted');
     status.classList.add('ok');
-    status.textContent = result.improved ? `전체 ${s.rank}위 / ${s.total}명 · 이 맵 개인 최고 기록 갱신!` : `등록 완료 · 내 최고 기록은 전체 ${s.rank}위 / ${s.total}명`;
+    status.textContent = result.improved ? tr(`전체 ${s.rank}위 / ${s.total}명 · 이 맵 개인 최고 기록 갱신!`, `World #${s.rank} of ${s.total} · New personal best on this map!`) : tr(`등록 완료 · 내 최고 기록은 전체 ${s.rank}위 / ${s.total}명`, `Submitted · Your best is #${s.rank} of ${s.total}`);
     boards.result.tab = 'global'; renderBoard('result', { fresh: true }); updateWorldInfo();
   } catch (error) {
-    button.disabled = false; button.textContent = '다시 등록'; status.classList.add('error');
-    status.textContent = `${describeError(error)} 기록은 이 브라우저에 저장했어요.`;
-    if (error.code === 'implausible_score') { button.disabled = true; button.textContent = '등록 불가'; }
+    button.disabled = false; button.textContent = tr('다시 등록', 'Retry'); status.classList.add('error');
+    status.textContent = `${describeError(error)} ${tr('기록은 이 브라우저에 저장했어요.', 'Your time was saved in this browser.')}`;
+    if (error.code === 'implausible_score') { button.disabled = true; button.textContent = tr('등록 불가', 'Not eligible'); }
     if (boards.result.tab === 'local') renderBoard('result');
   }
-  if (!storageWorks) $('#result-message').textContent = '이 브라우저가 저장을 차단해 이번 실행 동안만 기록이 유지됩니다.';
+  if (!storageWorks) $('#result-message').textContent = tr('이 브라우저가 저장을 차단해 이번 실행 동안만 기록이 유지됩니다.', 'This browser blocks storage, so times are kept only until you close the page.');
 });
 window.addEventListener('keydown', e => {
   if (e.target instanceof HTMLInputElement) { if (eventKey(e) === 'escape' && e.target.id === 'map-search') closeBrowser(); return; }
@@ -353,7 +356,7 @@ for (const b of document.querySelectorAll('[data-key]')) {
 let audioCtx = null, soundOn = false;
 function wakeAudio() { if (soundOn) { audioCtx ??= new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume().catch(() => { }); } }
 function chime(level = 1) { if (!soundOn || !audioCtx) return; for (let i = 0; i < level; i++) { const osc = audioCtx.createOscillator(), gain = audioCtx.createGain(); osc.type = 'sine'; osc.frequency.value = 440 * Math.pow(1.25, i); gain.gain.setValueAtTime(0, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(.08, audioCtx.currentTime + .015 + i * .1); gain.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + .35 + i * .1); osc.connect(gain).connect(audioCtx.destination); osc.start(audioCtx.currentTime + i * .1); osc.stop(audioCtx.currentTime + .4 + i * .1); } }
-$('#sound').addEventListener('click', () => { soundOn = !soundOn; $('#sound').textContent = soundOn ? '소리 ON' : '소리 OFF'; $('#sound').setAttribute('aria-label', soundOn ? '사운드 끄기' : '사운드 켜기'); wakeAudio(); chime(); });
+$('#sound').addEventListener('click', () => { soundOn = !soundOn; $('#sound').textContent = soundOn ? tr('소리 ON', 'SOUND ON') : tr('소리 OFF', 'SOUND OFF'); $('#sound').setAttribute('aria-label', soundOn ? tr('사운드 끄기', 'Mute sound') : tr('사운드 켜기', 'Turn sound on')); wakeAudio(); chime(); });
 
 const heroTarget = new THREE.Vector3(), camTarget = new THREE.Vector3(), lookTarget = new THREE.Vector3(), camForward = new THREE.Vector3(0, 0, -1), tmp = new THREE.Vector3();
 function updateHero(dt) {
@@ -434,7 +437,7 @@ function updateHookIndicators() {
   for (const [side, key] of [['left', 'a'], ['right', 'd']]) {
     const hooked = !!player.hooks[side], waiting = pressed(key) && !hooked;
     const indicator = $('#' + side + '-hook-state'); indicator.classList.toggle('connected', hooked); indicator.classList.toggle('waiting', waiting);
-    indicator.title = hooked ? '연결됨 · 키를 떼면 해제' : waiting ? '앞쪽 연결점 찾는 중' : '키를 눌러 연결';
+    indicator.title = hooked ? tr('연결됨 · 키를 떼면 해제', 'Hooked · release the key to let go') : waiting ? tr('앞쪽 연결점 찾는 중', 'Looking for a hook point ahead') : tr('키를 눌러 연결', 'Hold the key to hook');
     const button = document.querySelector('[data-key="' + key + '"]'); button.classList.toggle('connected', hooked); button.setAttribute('aria-pressed', String(pressed(key)));
   }
   for (const key of ['w', 's']) document.querySelector('[data-key="' + key + '"]').setAttribute('aria-pressed', String(pressed(key)));
@@ -448,9 +451,9 @@ function updateHud(dt) {
   const next = course.gates[player.gate]; $('#distance').textContent = next ? Math.max(0, Math.round(next.s - player.s)) + ' m' : 'FINISH';
   // Warn about the nearest real object (building, rock, tree...), on the side where it actually is.
   const near = world.collider.nearest(player.x, player.y, player.z, 6.6), warn = $('#wall-warning');
-  warn.hidden = !near; if (near) { const { hx, hz } = headingOf(player), right = (near.x - player.x) * -hz + (near.z - player.z) * hx > 0; warn.textContent = right ? '충돌 주의 ▶' : '◀ 충돌 주의'; warn.classList.toggle('right', right); warn.classList.toggle('danger', near.distance < 3.1); }
+  warn.hidden = !near; if (near) { const { hx, hz } = headingOf(player), right = (near.x - player.x) * -hz + (near.z - player.z) * hx > 0; warn.textContent = right ? tr('충돌 주의 ▶', 'WATCH OUT ▶') : tr('◀ 충돌 주의', '◀ WATCH OUT'); warn.classList.toggle('right', right); warn.classList.toggle('danger', near.distance < 3.1); }
   $('#progress-fill').style.width = Math.max(0, Math.min(100, player.s / course.length * 100)) + '%';
-  $('#web-status').textContent = player.releaseReady ? '지금 놓기!  ↗' : player.anchor ? (player.vy < 0 ? '하강 · 속도를 모으는 중' : player.forwardSpeed < 0 ? '다시 누르면 앞쪽 연결점에 연결' : '상승 중 · 조금 더 기다리기') : isTouch() ? '공중 비행 · 훅 패드를 눌러 연결' : '공중 비행 · A / D로 연결';
+  $('#web-status').textContent = player.releaseReady ? tr('지금 놓기!  ↗', 'RELEASE NOW!  ↗') : player.anchor ? (player.vy < 0 ? tr('하강 · 속도를 모으는 중', 'Swinging down · building speed') : player.forwardSpeed < 0 ? tr('다시 누르면 앞쪽 연결점에 연결', 'Press again to hook a point ahead') : tr('상승 중 · 조금 더 기다리기', 'Rising · wait a little longer')) : isTouch() ? tr('공중 비행 · 훅 패드를 눌러 연결', 'Flying · hold a hook pad') : tr('공중 비행 · A / D로 연결', 'Flying · hook with A / D');
   $('#web-status').style.color = player.releaseReady ? '#9affd0' : ''; $('#web-meter-fill').style.background = player.releaseReady ? '#9affd0' : ''; $('#web-meter-fill').style.width = (player.tension * 100) + '%';
 }
 function frame(now) {
@@ -461,7 +464,7 @@ function frame(now) {
   if (mode !== 'paused') worldTime += dt;
   if (mode === 'countdown') {
     countdown -= dt; $('#countdown').textContent = Math.max(1, Math.ceil(countdown));
-    if (countdown <= 0) { mode = 'playing'; hide('#countdown'); toast(isTouch() ? 'GO! 양쪽 패드로 훅을 걸어.' : 'GO! A / D로 훅을 걸어.', 2); chime(); }
+    if (countdown <= 0) { mode = 'playing'; hide('#countdown'); toast(isTouch() ? tr('GO! 양쪽 패드로 훅을 걸어.', 'GO! Hook with the pads.') : tr('GO! A / D로 훅을 걸어.', 'GO! Hook with A / D.'), 2); chime(); }
   }
   if (mode === 'playing') {
     accumulator += dt;
@@ -471,7 +474,7 @@ function frame(now) {
       if (player.attached) { if (isTouch()) navigator.vibrate?.(12); cueRunner(runner, 'catch'); hookFlash = 1; const a = (player.hooks.right || player.hooks.left).anchor; hookPulse.position.set(a.x, a.y, a.z); }
       if (player.released && !player.anchor) cueRunner(runner, 'release');
       if (event === 'gate') { world.gates[player.gate - 1].visible = false; toast(`CHECKPOINT ${pad(player.gate)}  /  ${pad(course.gates.length)}`, 1.7); chime(); }
-      if (event === 'recover') { resetRunner(runner); hero.position.set(player.x, player.y, player.z); const f = frameAt(course, player.s); camForward.set(f.tx, 0, f.tz); camera.position.set(player.x - f.tx * 23, player.y + 7, player.z - f.tz * 23); toast(`${({ obstacle: '부딪혔어요', missed: '게이트를 놓쳤어요' })[player.recoverReason] ?? '추락'} · 마지막 체크포인트로 복귀 · +3초`, 2.5); }
+      if (event === 'recover') { resetRunner(runner); hero.position.set(player.x, player.y, player.z); const f = frameAt(course, player.s); camForward.set(f.tx, 0, f.tz); camera.position.set(player.x - f.tx * 23, player.y + 7, player.z - f.tz * 23); toast(`${({ obstacle: tr('부딪혔어요', 'Crashed'), missed: tr('게이트를 놓쳤어요', 'Missed the gate') })[player.recoverReason] ?? tr('추락', 'Fell')} · ${tr('마지막 체크포인트로 복귀 · +3초', 'back to last checkpoint · +3s')}`, 2.5); }
       if (event === 'finish') { world.gates.at(-1).visible = false; finish(); }
     }
   }
@@ -487,7 +490,7 @@ function frame(now) {
   renderer.render(scene, camera);
 }
 window.addEventListener('resize', () => { const [w, h] = viewSize(); camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7)); });
-canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); pause(); $('#loading').textContent = '3D 화면 연결이 끊겼습니다. 페이지를 새로고침해 주세요.'; show('#loading'); });
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); pause(); $('#loading').textContent = tr('3D 화면 연결이 끊겼습니다. 페이지를 새로고침해 주세요.', 'Lost the 3D display. Please reload the page.'); show('#loading'); });
 let initial = 0;
 try { initial = Math.max(0, MAPS.findIndex(m => m.id === localStorage.getItem('skyhook.selectedMap'))); } catch { }
 loadMap(initial);
