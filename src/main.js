@@ -7,6 +7,7 @@ import { COURSES, createPlayer, step, formatTime, cleanRecords, frameAt, heading
 import { buildWorld } from './worlds.js';
 import { fetchBoard, submitRun, describeError } from './leaderboard.js';
 import { t as tr, localizeMaps } from './i18n.js';
+import { adblockActive } from './adblock.js';
 import { PLATFORM, ready, store, gameplayStart, gameplayStop, loadingStart, loadingStop, happytime, midgameAd, rewardedAd, playerName, onMuteSetting } from './platform.js';
 localizeMaps(MAPS);
 import './ads.js';
@@ -238,6 +239,7 @@ const pad = n => String(n).padStart(2, '0');
 let runsStarted = 0, adBreak = false;
 function begin() {
   if (adBreak) return;
+  if (adblocked) { showAdblock(); return; }
   if (isLocked(map)) { openUnlock(); return; }
   if (PLATFORM !== 'crazygames' || runsStarted === 0) { startRun(); return; }
   adBreak = true; pause(); clearInput(); gameplayStop();
@@ -264,6 +266,7 @@ function finish() {
   $('#result-message').textContent = player.falls ? tr(`완주! 복귀 ${player.falls}회 · 추가 시간 ${player.falls * 3}초 포함`, `Finished! ${player.falls} reset${player.falls > 1 ? 's' : ''} · includes +${player.falls * 3}s penalty`) : tr('한 번의 추락도 없이 완주했어요.', 'A clean run with no resets.');
   if (opened.length) { refreshLocks(); $('#result-message').textContent += tr(` · 모든 맵 완주! ${opened.map(m => m.name).join(', ')} 해금`, ` · Every map finished! ${opened.map(m => m.name).join(', ')} unlocked`); }
   try { $('#nickname').value = store.getItem('skyhook.nickname') || $('#nickname').value; } catch { }
+  $('#share-status').textContent = ''; $('#share-status').className = 'submit-status';
   boards.result.mapId = map.id; renderBoard('result'); chime(3);
 }
 function toast(text, seconds = 2) { $('#toast').textContent = text; toastUntil = worldTime + seconds; $('#toast').style.opacity = 1; }
@@ -333,6 +336,38 @@ document.querySelectorAll('.board-tabs').forEach(tabs => tabs.addEventListener('
 $('#records-toggle').addEventListener('click', () => { boards.records.mapId = map.id; renderBoard('records'); show('#records'); });
 $('#help-open').addEventListener('click', () => show('#help')); $('#help-done').addEventListener('click', () => hide('#help'));
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => hide('#' + b.dataset.close)));
+// Ads pay for the own site, so a blocker holds the game at the menu until it is switched off. There is no close button.
+let adblocked = false;
+function showAdblock() { $('#adblock-status').textContent = ''; show('#adblock'); $('#adblock-recheck').focus(); }
+async function checkAdblock() {
+  adblocked = await adblockActive();
+  if (adblocked) showAdblock();
+  else hide('#adblock');
+  return adblocked;
+}
+$('#adblock-recheck').addEventListener('click', async () => {
+  const button = $('#adblock-recheck'); button.disabled = true; $('#adblock-status').textContent = tr('확인하는 중…', 'Checking…');
+  const still = await checkAdblock();
+  button.disabled = false;
+  if (still) $('#adblock-status').textContent = tr('아직 광고 차단기가 켜져 있어요. 끄고 다시 확인해 주세요.', 'The ad blocker is still on. Turn it off and check again.');
+});
+$('#adblock-reload').addEventListener('click', () => location.reload());
+const shareLink = () => { const url = new URL(location.href); url.search = `?map=${map.id}`; url.hash = ''; return url.toString(); };
+function shareLine() { return tr(`SKYHOOK · ${map.name} ${formatTime(player.time)} · 이 기록 이길 수 있어?`, `SKYHOOK · ${map.name} ${formatTime(player.time)} · Can you beat this time?`); }
+if (PLATFORM !== 'web') $('#share').hidden = true;
+$('#share').addEventListener('click', async () => {
+  const status = $('#share-status'), text = shareLine(), url = shareLink();
+  status.className = 'submit-status';
+  try {
+    if (navigator.share) { await navigator.share({ title: 'SKYHOOK', text, url }); return; }
+    await navigator.clipboard.writeText(`${text}
+${url}`);
+    status.classList.add('ok'); status.textContent = tr('기록과 링크를 복사했어요. 붙여넣기로 공유하세요.', 'Time and link copied. Paste it anywhere to share.');
+  } catch (error) {
+    if (error?.name === 'AbortError') return;  // the player closed the share sheet
+    status.classList.add('error'); status.textContent = `${text} ${url}`;
+  }
+});
 // Unlock dialog: watching is optional (the skip button looks the same), and nothing unlocks if the ad fails.
 let unlocking = false;
 function openUnlock() {
@@ -381,6 +416,7 @@ window.addEventListener('keydown', e => {
   const k = eventKey(e);
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k) && ['playing', 'countdown', 'paused'].includes(mode)) e.preventDefault();
   if (k === 'escape') { if (mode === 'paused') resume(); else if (['playing', 'countdown'].includes(mode)) pause(); else { hide('#help'); hide('#records'); closeUnlock(); closeBrowser(); } return; }
+  if (adblocked) return;
   if (k === 'r' && !e.repeat && ['playing', 'paused', 'countdown'].includes(mode)) { begin(); return; }
   if (mode === 'menu' && (!$('#map-browser').classList.contains('hidden') || !$('#unlock').classList.contains('hidden'))) return;
   if (mode === 'menu' && $('#records').classList.contains('hidden') && $('#help').classList.contains('hidden')) {
@@ -549,6 +585,8 @@ canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); pause(); 
 await ready; loadingStart();
 let initial = 0;
 try { initial = Math.max(0, MAPS.findIndex(m => m.id === store.getItem('skyhook.selectedMap'))); } catch { }
+const shared = MAPS.findIndex(m => m.id === new URLSearchParams(location.search).get('map'));
+if (shared >= 0) initial = shared;
 loadMap(initial);
 hide('#loading'); requestAnimationFrame(frame); loadingStop();
 // Dev server only (stripped from builds): lets capture scripts read the run, e.g. to autopilot trailer footage.
@@ -557,3 +595,4 @@ onMuteSetting(muted => { if (muted && soundOn) $('#sound').click(); $('#sound').
 playerName().then(name => { try { if (name && !store.getItem('skyhook.nickname')) $('#nickname').value = name.slice(0, 16); } catch { } });
 // CrazyGames players land directly in a run on the map they last had selected; the menu is one pause away.
 if (PLATFORM === 'crazygames') { if (isLocked(map)) loadMap(0); startRun(); }
+else checkAdblock();

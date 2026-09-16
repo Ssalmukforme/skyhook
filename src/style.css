@@ -137,3 +137,8 @@ body.touch #hud:has(.ad-play.filled) .hud-bottom{bottom:calc(228px + env(safe-ar
 .map-tile.locked .tile-route,.map-tile.locked .tile-title{opacity:.55}.map-tile.locked .tile-go{letter-spacing:0}
 .unlock-dialog{max-width:420px}.unlock-dialog p{line-height:1.6}.unlock-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.unlock-actions button{width:100%;min-height:48px}
 @media(max-width:600px){.unlock-actions{grid-template-columns:1fr}}
+/* Own site: the ad blocker notice has no close button, so it sits above every other overlay. */
+#adblock{z-index:20}.adblock-dialog{max-width:440px}.adblock-dialog p{line-height:1.6}
+/* Result screen: share sits next to "again", same row. */
+.result-actions{display:flex;gap:10px;align-items:stretch;margin-top:4px}.result-actions .primary{flex:1}.result-actions .secondary{white-space:nowrap}
+@media(max-width:600px){.result-actions{flex-direction:column}}
