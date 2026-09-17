@@ -35,14 +35,15 @@ export const ENVIRONMENTS = {
     particles: { count: 220, color: '#ffffff', size: .26, opacity: .8, fall: -.5, drift: [1.4, 0, .6] }, stars: 0, aurora: 0 },
 };
 
-const cube = new THREE.BoxGeometry(1, 1, 1);
+// cube, glowMat and bake are shared with the mobile app's endless scenery (src/app/scenery.js).
+export const cube = new THREE.BoxGeometry(1, 1, 1);
 const materialCache = new Map();
 export function mat(color, extra = {}) {
   const key = color + JSON.stringify(extra);
   if (!materialCache.has(key)) materialCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra }));
   return materialCache.get(key);
 }
-const glowMat = (color, intensity = 1) => mat(color, { emissive: color, emissiveIntensity: intensity });
+export const glowMat = (color, intensity = 1) => mat(color, { emissive: color, emissiveIntensity: intensity });
 const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 function createKit(course, seedValue) {
@@ -113,7 +114,7 @@ function createKit(course, seedValue) {
   return { statics, root, random, range, pick, box, shape, cylinder, at, instance, instanceLists, windows, ribbon, bounds, nearest, movers, updaters, course };
 }
 
-function bake(kit, instanceMaterials) {
+export function bake(kit, instanceMaterials) {
   const { statics, root } = kit;
   statics.updateMatrixWorld(true);
   for (const [name, list] of kit.instanceLists) {

@@ -96,7 +96,8 @@ export function locate(c, x, z, hint = -1) {
   let best = -1, bd = Infinity;
   const scan = (a, b) => { for (let i = Math.max(0, a); i <= Math.min(c.n - 1, b); i++) { const d = (c.xs[i] - x) ** 2 + (c.zs[i] - z) ** 2; if (d < bd) { bd = d; best = i; } } };
   if (hint >= 0) scan(hint - 45, hint + 45);
-  if (best < 0 || bd > (c.halfWidth * 2.5) ** 2) { bd = Infinity; scan(0, c.n - 1); }
+  // An endless track keeps growing, so a lost runner is searched for only around the last match.
+  if (best < 0 || bd > (c.halfWidth * 2.5) ** 2) { bd = Infinity; if (c.scanWindow && hint >= 0) scan(hint - c.scanWindow, hint + c.scanWindow); else scan(0, c.n - 1); }
   let seg = best, u = 0, pick = Infinity;
   for (const i of [best - 1, best]) {
     if (i < 0 || i >= c.n - 1) continue;
@@ -171,8 +172,13 @@ export function recover(p, reason = 'fall') {
 // world (optional): { hits(x, y, z, radius) } testing the drawn map geometry. There is no invisible corridor wall:
 // the runner only crashes into objects that actually exist. Node tests without a world simply fly through open air.
 export function step(p, input, dt, world = null) {
-  if (p.done) return null;
+  if (p.done || p.dead) return null;
   const c = p.course;
+  // Endless tracks have no checkpoints: a fall or crash ends the run instead of sending the runner back.
+  const fail = reason => {
+    if (c.endless) { p.dead = true; p.deathReason = reason; return 'dead'; }
+    recover(p, reason); return 'recover';
+  };
   p.time += dt;
   const old = { x: p.x, y: p.y, z: p.z };
   p.attached = false; p.released = false;
@@ -235,10 +241,10 @@ export function step(p, input, dt, world = null) {
       }
     }
   }
-  if (gate && p.s > gate.s + 48) { recover(p, 'missed'); return 'recover'; }
-  if (p.y < p.ground + 4 || p.y > p.ground + 160 || p.s < -60) { recover(p, 'fall'); return 'recover'; }
+  if (gate && p.s > gate.s + 48) return fail('missed');
+  if (p.y < p.ground + 4 || p.y > p.ground + 160 || p.s < -60) return fail('fall');
   // Sample the midpoint too, so a fast frame cannot skip through a thin pole or beam.
-  if (world && (world.hits(p.x, p.y, p.z, BODY_RADIUS) || world.hits((p.x + old.x) / 2, (p.y + old.y) / 2, (p.z + old.z) / 2, BODY_RADIUS))) { recover(p, 'obstacle'); return 'recover'; }
+  if (world && (world.hits(p.x, p.y, p.z, BODY_RADIUS) || world.hits((p.x + old.x) / 2, (p.y + old.y) / 2, (p.z + old.z) / 2, BODY_RADIUS))) return fail('obstacle');
   return null;
 }
 export function formatTime(seconds) { const ms = Math.max(0, Math.floor(seconds * 1000)); return `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`; }

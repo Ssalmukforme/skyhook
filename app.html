@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#252333">
+<title>SKYHOOK</title>
+</head>
+<body>
+<canvas id="world" aria-label="끝없이 이어지는 스윙 코스"></canvas>
+<div class="vignette"></div>
+<div id="loading">도시에 불을 켜는 중…</div>
+<div id="flash" aria-hidden="true"></div>
+
+<main id="menu" class="screen">
+  <div class="menu-top">
+    <span class="brand"><span class="brand-icon">S</span>SKYHOOK</span>
+    <button id="sound" class="chip" type="button" aria-label="사운드 켜기">소리 OFF</button>
+  </div>
+  <div class="menu-title">
+    <p class="eyebrow">ENDLESS</p>
+    <h1>SKY<span>HOOK</span></h1>
+    <p class="tagline">줄을 걸고, 흔들고, 놓고.<br>어디까지 날아갈 수 있을까?</p>
+  </div>
+  <div class="menu-bottom">
+    <div class="best-card">
+      <span>내 최고 거리</span>
+      <strong id="menu-best">0<small> m</small></strong>
+    </div>
+    <button id="start" class="primary" type="button">탭해서 시작</button>
+    <p class="how">화면 <b>왼쪽</b>을 누르면 왼쪽 훅, <b>오른쪽</b>을 누르면 오른쪽 훅.<br>누르고 있으면 매달리고, 떼면 날아가요.</p>
+  </div>
+</main>
+
+<div id="touch-layer" class="hidden" aria-hidden="true">
+  <div class="touch-half" data-side="left"><span>누르고 있기<br><b>◀ 왼쪽 훅</b></span></div>
+  <div class="touch-half" data-side="right"><span>누르고 있기<br><b>오른쪽 훅 ▶</b></span></div>
+</div>
+
+<section id="hud" class="hidden">
+  <div class="hud-top">
+    <div class="zone">
+      <span id="zone-no">DISTRICT 01</span>
+      <strong id="zone-name">메리골드 애비뉴</strong>
+    </div>
+    <div class="distance">
+      <strong id="distance">0<small> m</small></strong>
+      <span id="hud-best">BEST 0 m</span>
+    </div>
+    <button id="pause-button" class="chip icon" type="button" aria-label="일시정지">II</button>
+  </div>
+  <div id="wall-warning" hidden>충돌 주의</div>
+  <div id="toast"></div>
+  <div class="hud-bottom">
+    <div class="hook-state" id="left-hook-state">L</div>
+    <div class="swing">
+      <div class="meter"><i id="meter-fill"></i></div>
+      <span class="speed"><b id="speed">0</b> km/h</span>
+    </div>
+    <div class="hook-state" id="right-hook-state">R</div>
+  </div>
+</section>
+<div id="countdown" class="hidden">3</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="dialog">
+    <p class="eyebrow">PAUSED</p>
+    <h2>잠시 멈춤</h2>
+    <button id="resume" class="primary" type="button">계속하기</button>
+    <button class="secondary home-button" type="button">홈으로</button>
+  </div>
+</div>
+
+<div id="over" class="overlay hidden">
+  <div class="dialog">
+    <p class="eyebrow" id="over-eyebrow">RUN OVER</p>
+    <h2 id="over-reason">추락했어요</h2>
+    <span class="result-label">이번 거리</span>
+    <strong id="over-distance">0<small> m</small></strong>
+    <p class="over-best"><span id="over-new" class="badge hidden">최고 기록!</span><span id="over-best">최고 0 m</span></p>
+    <p class="over-zone" id="over-zone"></p>
+    <button id="again" class="primary" type="button">다시 하기</button>
+    <button class="secondary home-button" type="button">홈으로</button>
+  </div>
+</div>
+<script type="module" src="/src/app/main.js"></script>
+</body>
+</html>

@@ -12,7 +12,9 @@
     "build:crazygames": "vite build --configLoader native --mode crazygames",
     "pack:crazygames": "npm run build:crazygames && node scripts/pack-crazygames.mjs",
     "dev:crazygames:full": "vite --host 0.0.0.0 --configLoader native --mode crazygames-full",
-    "build:crazygames:full": "vite build --configLoader native --mode crazygames-full"
+    "build:crazygames:full": "vite build --configLoader native --mode crazygames-full",
+    "dev:app": "vite --host 0.0.0.0 --configLoader native --mode app",
+    "build:app": "vite build --configLoader native --mode app"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.3.0",

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 //   npm run build              -> dist/            own site: / (Korean) and /en/ (English), Adsterra banners, Google Fonts
 //   npm run build:crazygames   -> dist-crazygames/ CrazyGames portal: one English page, CrazyGames SDK, fonts bundled, relative paths
 //   npm run build:crazygames:full -> same, with map 07 locked behind a rewarded ad (for Full Launch; Basic Launch has no ads)
+//   npm run build:app          -> dist-app/          mobile app (endless mode, app.html served as index.html, relative paths for Capacitor)
 const FONT_IMPORTS = [
   '@fontsource/noto-sans-kr/latin-400.css', '@fontsource/noto-sans-kr/latin-500.css', '@fontsource/noto-sans-kr/latin-600.css',
   '@fontsource/noto-sans-kr/latin-700.css', '@fontsource/noto-sans-kr/latin-800.css',
@@ -37,8 +38,28 @@ function platformBuild(crazygames) {
   };
 }
 
+// The app is a separate page (app.html + src/app/); inside the app bundle it becomes the start page.
+const appEntry = {
+  name: 'skyhook-app-entry',
+  enforce: 'post',
+  generateBundle(_, bundle) { if (bundle['app.html']) bundle['app.html'].fileName = 'index.html'; },
+  // Dev server: the app is also the start page, so http://localhost:5173/ opens it like the built app does.
+  configureServer(server) {
+    server.middlewares.use((req, _res, next) => { if (req.url === '/' || req.url?.startsWith('/?')) req.url = '/app.html' + req.url.slice(1); next(); });
+  },
+};
+
 export default defineConfig(({ mode }) => {
   const crazygames = mode === 'crazygames' || mode === 'crazygames-full';
+  if (mode === 'app') {
+    return {
+      base: './',
+      publicDir: false,
+      // platformBuild keeps the web game's virtual font module resolvable, so /index.html still loads in this mode.
+      plugins: [platformBuild(false), appEntry],
+      build: { outDir: 'dist-app', rollupOptions: { input: { app: 'app.html' }, output: { manualChunks: { three: ['three'] } } } },
+    };
+  }
   return {
     base: crazygames ? './' : '/',
     publicDir: crazygames ? false : 'public',

@@ -1,0 +1,1 @@
+{"version":"0.0.1","configurations":[{"name":"app","runtimeExecutable":"C:\\Users\\wonye\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe","runtimeArgs":["node_modules/vite/bin/vite.js","--host","0.0.0.0","--configLoader","native","--mode","app","--port","5180","--strictPort"],"port":5180}]}

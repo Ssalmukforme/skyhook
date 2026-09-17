@@ -4,5 +4,6 @@ dist/
 .env
 *.local
 dist-crazygames/
+dist-app/
 skyhook-crazygames.zip
 crazygames-submission/
